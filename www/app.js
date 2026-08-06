@@ -154,18 +154,16 @@ function avatarDataUri(name) {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect width="100" height="100" rx="50" fill="#FDEAD6"/><text x="50" y="58" font-family="Inter,sans-serif" font-size="38" font-weight="700" fill="#D96A0F" text-anchor="middle">${txt}</text></svg>`;
   return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
 }
-// O Supabase Storage não honra o cache-control que a gente manda no upload
-// (confirmado via curl: sempre devolve "no-cache") — então toda foto seria
-// rebaixada do zero a cada tela. Como o próprio backend não tem esse
-// problema (a gente controla o header que ele manda), reescreve a URL da
-// foto pra passar pelo proxy /img/ do backend em vez de bater direto no
-// Supabase — aí o navegador consegue de fato guardar a foto em cache.
+// Tentativa anterior: reescrever pro proxy /img/ do backend pra contornar o
+// cache-control quebrado do Supabase. Revertido — o Supabase serve via CDN
+// global (Cloudflare, perto de qualquer lugar), e o Railway é servidor único
+// (uma região só). Trocar "CDN rápido sem cache" por "servidor mais longe
+// com cache" piorou o tempo de carregamento na prática (testado com o
+// usuário real: ficou mais lento). Volta a bater direto no Supabase — o
+// cache do lado do navegador (ver sw.js) continua tentando ajudar sem esse
+// custo extra de rede.
 function imgProxy(url) {
-  if (!url) return url;
-  const marker = '/storage/v1/object/public/provider-photos/';
-  const idx = url.indexOf(marker);
-  if (idx === -1) return url;
-  return '/img/' + url.slice(idx + marker.length);
+  return url;
 }
 function avatarSrc(u) {
   const photo = u?.photoUrl || u?.photo_url;
