@@ -1,5 +1,5 @@
 {
-  "name": "chama-mobile",
+  "name": "nexserv-mobile",
   "version": "0.1.0",
   "description": "App móvel do Chama (cliente/prestador) — wrapper Capacitor do app web",
   "scripts": {
