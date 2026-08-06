@@ -3232,17 +3232,13 @@ async function renderAllProvidersScreen() {
   const el = document.getElementById('all-providers-list');
   el.innerHTML = '<div class="empty-state" style="padding:40px 20px;"><p>Carregando...</p></div>';
   const providers = await api('/providers/directory/list');
-  el.innerHTML = providers.length ? providers.map((p) => `
-    <div class="req-card" onclick="viewProviderProfile('${p.id}','all-providers')">
-      <div class="ticket-row" style="align-items:center;">
-        <img class="avatar" src="${avatarSrc(p)}" style="border-radius:50%;">
-        <div class="ticket-info">
-          <div class="name-row"><span class="name">${p.name}</span>${p.is_founder ? ' 🏆' : ''}${p.is_subscriber ? ' ⭐' : ''}${p.featured ? '<span class="badge-featured">★</span>' : ''}</div>
-          <div class="stars">★ ${p.rating_avg ? parseFloat(p.rating_avg).toFixed(1) : '—'} (${p.rating_count || 0}) · ${(p.categories || [])[0] || ''}</div>
-        </div>
-      </div>
+  el.innerHTML = providers.length ? `<div class="provider-grid">${providers.map((p) => `
+    <div class="p-card" onclick="viewProviderProfile('${p.id}','all-providers')">
+      <div class="p-photo"><img src="${avatarSrc(p)}"></div>
+      <div class="p-name">${firstNameLastInitial(p.name)}${p.is_founder ? ' 🏆' : ''}${p.is_subscriber ? ' ⭐' : ''}${p.featured ? '<span class="badge-featured">★</span>' : ''}</div>
+      <div class="p-rating">★ ${p.rating_avg ? parseFloat(p.rating_avg).toFixed(1) : '—'} (${p.rating_count || 0})</div>
     </div>
-  `).join('') : '<div class="empty-state"><span class="glyph">🔍</span><p>Nenhum profissional cadastrado ainda.</p></div>';
+  `).join('')}</div>` : '<div class="empty-state"><span class="glyph">🔍</span><p>Nenhum profissional cadastrado ainda.</p></div>';
 }
 
 const _origShowScreen = showScreen;
