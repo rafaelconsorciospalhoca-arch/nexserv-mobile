@@ -154,13 +154,26 @@ function avatarDataUri(name) {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect width="100" height="100" rx="50" fill="#FDEAD6"/><text x="50" y="58" font-family="Inter,sans-serif" font-size="38" font-weight="700" fill="#D96A0F" text-anchor="middle">${txt}</text></svg>`;
   return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
 }
+// O Supabase Storage não honra o cache-control que a gente manda no upload
+// (confirmado via curl: sempre devolve "no-cache") — então toda foto seria
+// rebaixada do zero a cada tela. Como o próprio backend não tem esse
+// problema (a gente controla o header que ele manda), reescreve a URL da
+// foto pra passar pelo proxy /img/ do backend em vez de bater direto no
+// Supabase — aí o navegador consegue de fato guardar a foto em cache.
+function imgProxy(url) {
+  if (!url) return url;
+  const marker = '/storage/v1/object/public/provider-photos/';
+  const idx = url.indexOf(marker);
+  if (idx === -1) return url;
+  return '/img/' + url.slice(idx + marker.length);
+}
 function avatarSrc(u) {
   const photo = u?.photoUrl || u?.photo_url;
-  return photo || avatarDataUri(u?.name);
+  return photo ? imgProxy(photo) : avatarDataUri(u?.name);
 }
 function avatarBoxHTML(name, photoUrl) {
   return photoUrl
-    ? `<img src="${photoUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;">`
+    ? `<img src="${imgProxy(photoUrl)}" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;">`
     : initials(name);
 }
 
@@ -192,7 +205,7 @@ const catFg = ['#D96A0F', '#3B82F6', '#16A34A', '#8B5CF6', '#D97706', '#DC2626']
 // (se tiver); sem foto, cai no emoji de sempre.
 function categoryChipHTML(c, i) {
   const icon = c.image_url
-    ? `<img src="${c.image_url}" alt="">`
+    ? `<img src="${imgProxy(c.image_url)}" alt="">`
     : categoryIcon[c.name] || '🛠️';
   return `
     <div class="chip ${c.hasProviders ? 'has-providers' : ''} ${c.image_url ? 'has-image' : ''}" onclick="openCategory('${c.name.replace(/'/g, "\\'")}')">
@@ -965,7 +978,7 @@ async function loadHomeCategories() {
 function bannerHTML(b) {
   return `
     <a class="ad-banner" href="${b.link_url}" target="_blank" rel="noopener">
-      <img src="${b.image_url}" alt="${b.advertiser_name}">
+      <img src="${imgProxy(b.image_url)}" alt="${b.advertiser_name}">
     </a>
   `;
 }
@@ -1440,7 +1453,7 @@ async function viewProviderProfile(providerId, returnTo = 'proposals') {
     ${p.bio ? `<div class="section-title"><h3>Sobre</h3></div><p style="font-size:13.5px;color:var(--ink-soft);">${p.bio}</p>` : ''}
     ${p.portfolio && p.portfolio.length ? `
       <div class="section-title"><h3>Trabalhos realizados</h3></div>
-      <div class="portfolio-grid">${p.portfolio.map((ph) => `<div class="portfolio-item"><img src="${ph.photo_url}"></div>`).join('')}</div>
+      <div class="portfolio-grid">${p.portfolio.map((ph) => `<div class="portfolio-item"><img src="${imgProxy(ph.photo_url)}"></div>`).join('')}</div>
     ` : ''}
     <div class="section-title"><h3>Avaliações</h3></div>
     ${p.reviews && p.reviews.length ? `
@@ -2989,7 +3002,7 @@ async function remindProviderSlow() {
 
 function messageBubbleHTML(m) {
   const mine = m.sender_id === user.id;
-  const attachment = m.attachment_url ? `<img src="${m.attachment_url}">` : '';
+  const attachment = m.attachment_url ? `<img src="${imgProxy(m.attachment_url)}">` : '';
   return `<div class="bubble ${mine ? 'me' : 'them'}">${esc(m.content)}${attachment}<div class="bubble-time">${timeFmt(m.created_at)}</div></div>`;
 }
 
@@ -3285,7 +3298,7 @@ async function saveProviderBio() {
 function renderPortfolioGrid(photos) {
   document.getElementById('portfolio-grid').innerHTML = photos.map((p) => `
     <div class="portfolio-item">
-      <img src="${p.photo_url}">
+      <img src="${imgProxy(p.photo_url)}">
       <button class="remove-btn" onclick="deletePortfolioPhoto('${p.id}')">&times;</button>
     </div>
   `).join('');
