@@ -1,0 +1,1313 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEXSERV — Entrar ou cadastrar</title>
+<meta name="description" content="Entre na sua conta NEXSERV ou cadastre-se como cliente ou prestador de serviços.">
+<link rel="icon" type="image/png" href="logo-icon.png">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#22C55E">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="stylesheet" href="style.css?v=20260723a">
+</head>
+<body>
+
+<div class="app-shell">
+
+  <!-- LOGIN -->
+  <section class="screen active" data-screen="login">
+    <div class="login-hero">
+      <img class="login-mark" src="logo-icon.png" alt="NEXSERV">
+      <div class="login-word">NEX<b>SERV</b></div>
+      <div class="login-tagline">O jeito inteligente de contratar serviços.</div>
+    </div>
+    <div class="screen-scroll">
+      <div class="login-wrap">
+        <h1>Bem-vindo de volta</h1>
+        <p class="sub">Entre para pedir ou oferecer serviços com confiança.</p>
+
+        <div class="field"><label>E-mail</label><input type="email" id="login-email"></div>
+        <div class="field">
+          <label>Senha</label>
+          <div class="password-field">
+            <input type="password" id="login-password">
+            <button type="button" class="password-toggle" onclick="togglePasswordVisibility('login-password', this)">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </div>
+        </div>
+        <button class="btn btn-primary btn-block" id="login-btn" onclick="doLogin(this)">Entrar</button>
+        <div class="error-msg" id="login-error"></div>
+        <div style="text-align:center;margin-top:10px;">
+          <a onclick="openForgotPassword()" style="font-size:12.5px;color:var(--ink-soft);cursor:pointer;text-decoration:underline;">Esqueci minha senha</a>
+        </div>
+
+        <div class="divider-or">ou</div>
+        <button class="btn btn-ghost btn-block" onclick="openRegister('client', 'login')">Criar conta gratuita</button>
+
+        <div class="link-row">É prestador de serviço? <a onclick="openRegister('provider', 'login')">Cadastre-se aqui</a></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ESQUECI MINHA SENHA -->
+  <section class="screen" data-screen="forgot-password">
+    <div class="back-row">
+      <button class="back-btn" onclick="showScreen('login')">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <h2>Esqueci minha senha</h2>
+    </div>
+    <div class="screen-scroll">
+      <div id="forgot-password-form">
+        <p class="sub" style="margin-bottom:16px;">Digite o e-mail da sua conta. Vamos enviar um link para você redefinir sua senha.</p>
+        <div class="field"><label>E-mail</label><input type="email" id="forgot-email"></div>
+        <button class="btn btn-primary btn-block" onclick="sendForgotPasswordEmail()">Enviar link de redefinição</button>
+        <div class="error-msg" id="forgot-password-error"></div>
+      </div>
+      <div id="forgot-password-success" style="display:none;text-align:center;padding:20px 0;">
+        <p style="font-size:14px;color:var(--ink);line-height:1.6;">
+          Se esse e-mail estiver cadastrado, enviamos um link de redefinição de senha para ele. Confira sua caixa de entrada (e o spam).
+        </p>
+        <button class="btn btn-ghost btn-block" style="margin-top:16px;" onclick="showScreen('login')">Voltar para o login</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- REDEFINIR SENHA (via link do e-mail) -->
+  <section class="screen" data-screen="reset-password">
+    <div class="screen-scroll">
+      <div class="login-wrap">
+        <h1>Redefinir senha</h1>
+        <p class="sub">Digite sua nova senha para acessar a NEXSERV.</p>
+        <div id="reset-password-form">
+          <div class="field">
+            <label>Nova senha</label>
+            <div class="password-field">
+              <input type="password" id="reset-new-password">
+              <button type="button" class="password-toggle" onclick="togglePasswordVisibility('reset-new-password', this)">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              </button>
+            </div>
+          </div>
+          <div class="field">
+            <label>Confirmar nova senha</label>
+            <div class="password-field">
+              <input type="password" id="reset-confirm-password">
+              <button type="button" class="password-toggle" onclick="togglePasswordVisibility('reset-confirm-password', this)">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              </button>
+            </div>
+          </div>
+          <button class="btn btn-primary btn-block" onclick="submitResetPassword()">Redefinir senha</button>
+          <div class="error-msg" id="reset-password-error"></div>
+        </div>
+        <div id="reset-password-success" style="display:none;text-align:center;padding:20px 0;">
+          <p style="font-size:14px;color:var(--ink);line-height:1.6;">Senha redefinida com sucesso!</p>
+          <button class="btn btn-primary btn-block" style="margin-top:16px;" onclick="showScreen('login')">Ir para o login</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CADASTRO -->
+  <section class="screen" data-screen="register">
+    <div class="back-row">
+      <button class="back-btn" onclick="showScreen(registerBackScreen)">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <h2>Criar conta</h2>
+    </div>
+    <div class="screen-scroll">
+      <div class="role-toggle">
+        <button type="button" class="active" id="role-client-btn" onclick="setRole('client')">Sou cliente</button>
+        <button type="button" id="role-provider-btn" onclick="setRole('provider')">Sou prestador</button>
+      </div>
+
+      <div id="client-coming-soon" style="display:none;">
+        <div class="card" style="text-align:center;padding:24px 20px 4px;">
+          <div style="font-size:32px;margin-bottom:10px;">🚀</div>
+          <strong style="font-size:15px;">Em breve para clientes</strong>
+          <p style="font-size:13px;color:var(--ink-soft);margin:8px 0 0;line-height:1.5;">Estamos lançando primeiro para prestadores. Deixe seu contato que avisamos por e-mail assim que abrir!</p>
+        </div>
+        <div id="waitlist-form">
+          <div class="field"><label>Nome</label><input id="waitlist-name"></div>
+          <div class="field"><label>E-mail</label><input type="email" id="waitlist-email"></div>
+          <div class="field"><label>Telefone (opcional)</label><input id="waitlist-phone" placeholder="11999999999"></div>
+          <button class="btn btn-primary btn-block" onclick="joinWaitlist()">Entrar na lista de espera</button>
+          <div class="error-msg" id="waitlist-error"></div>
+        </div>
+        <div id="waitlist-success" style="display:none;text-align:center;padding:16px 20px;">
+          <div style="font-size:28px;margin-bottom:8px;">✅</div>
+          <strong style="font-size:14px;">Você está na lista!</strong>
+          <p style="font-size:12.5px;color:var(--ink-soft);margin:6px 0 0;">Avisamos por e-mail assim que o cadastro de clientes abrir.</p>
+        </div>
+      </div>
+
+      <div id="register-form-fields">
+      <div class="field"><label>Nome completo</label><input id="reg-name"></div>
+      <div class="field"><label>E-mail</label><input type="email" id="reg-email"></div>
+      <div class="field">
+        <label>Senha</label>
+        <div class="password-field">
+          <input type="password" id="reg-password">
+          <button type="button" class="password-toggle" onclick="togglePasswordVisibility('reg-password', this)">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="field"><label>Telefone</label><input id="reg-phone" placeholder="11999999999"></div>
+
+      <div id="client-fields">
+        <div class="field"><label>CPF (opcional)</label><input id="reg-client-document" placeholder="Somente números"></div>
+        <div class="field"><label>CEP (opcional)</label><input id="reg-client-zip" placeholder="00000000" oninput="autoFillCep(this.value, 'client')"></div>
+        <div style="display:flex;gap:10px;">
+          <div class="field" style="flex:1;"><label>Bairro</label><input id="reg-client-neighborhood"></div>
+          <div class="field" style="flex:2;"><label>Cidade</label><input id="reg-client-city"></div>
+          <div class="field" style="flex:1;"><label>UF</label><input id="reg-client-state" maxlength="2" placeholder="PR" style="text-transform:uppercase;"></div>
+        </div>
+      </div>
+
+      <div id="provider-fields" style="display:none;">
+        <div class="field"><label>CPF ou CNPJ</label><input id="reg-document" placeholder="Somente números"></div>
+        <div class="field"><label>CEP</label><input id="reg-zip" placeholder="00000000" oninput="autoFillCep(this.value, 'provider')"></div>
+        <div class="field"><label>Rua</label><input id="reg-street"></div>
+        <div style="display:flex;gap:10px;">
+          <div class="field" style="flex:1;"><label>Número</label><input id="reg-street-number"></div>
+          <div class="field" style="flex:1;"><label>Complemento (opcional)</label><input id="reg-complement"></div>
+        </div>
+        <div style="display:flex;gap:10px;">
+          <div class="field" style="flex:1;"><label>Bairro</label><input id="reg-neighborhood"></div>
+          <div class="field" style="flex:2;"><label>Cidade</label><input id="reg-city"></div>
+          <div class="field" style="flex:1;"><label>UF</label><input id="reg-state" maxlength="2" placeholder="PR" style="text-transform:uppercase;"></div>
+        </div>
+        <div class="field">
+          <label>Categorias que atende (toque para selecionar)</label>
+          <input type="text" id="reg-category-search" placeholder="Buscar categoria..." oninput="renderRegCategoryChips()" style="margin-bottom:10px;">
+          <div class="chip-select" id="reg-category-chips"></div>
+        </div>
+        <div class="fee-note" style="align-items:flex-start;">
+          <span>📍</span>
+          <div style="flex:1;">
+            <strong style="display:block;margin-bottom:8px;">Atende mais de uma cidade? Selecione todas — quanto mais cidades, mais pedidos você recebe!</strong>
+            <div class="chip-select" id="reg-city-chips"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="field"><label>Código de indicação (opcional)</label><input id="reg-referral" placeholder="Ex: MARIA4X9K"></div>
+
+      <label class="checkbox-row" style="display:flex;align-items:flex-start;gap:8px;font-size:12.5px;color:var(--ink-soft);margin:12px 0;line-height:1.5;">
+        <input type="checkbox" id="reg-terms-accepted" style="margin-top:2px;">
+        <span>Li e aceito os <a onclick="event.preventDefault();openLegalScreen('terms','register')">Termos de Uso</a> e a <a onclick="event.preventDefault();openLegalScreen('privacy','register')">Política de Privacidade</a>.</span>
+      </label>
+
+      <button class="btn btn-primary btn-block" onclick="doRegister(this)">Criar conta</button>
+      <div class="error-msg" id="register-error"></div>
+      <button type="button" class="btn btn-ghost btn-block" id="how-it-works-btn" style="display:none;margin-top:10px;" onclick="openHowItWorks('register')">💰 Como funciona a comissão e as taxas</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- COMO FUNCIONA (comissão, moedas, saque) -->
+  <section class="screen" data-screen="how-it-works">
+    <div class="back-row">
+      <button class="back-btn" onclick="closeHowItWorks()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <h2>Como funciona</h2>
+    </div>
+    <div class="screen-scroll">
+      <div class="card" id="how-it-works-content"></div>
+    </div>
+  </section>
+
+  <!-- HOME CLIENTE -->
+  <section class="screen" data-screen="home">
+    <div class="topbar">
+      <button class="topbar-icon-btn" onclick="setTab('profile')">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+      <div class="brand"><img src="logo-horizontal.png" alt="NEXSERV"></div>
+      <button class="topbar-icon-btn" onclick="openNotifications()">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+        <span class="topbar-badge" id="notif-badge" style="display:none;">0</span>
+      </button>
+    </div>
+    <div class="screen-scroll">
+      <div id="guest-auth-row" style="display:none;gap:10px;padding:0 0 12px;">
+        <button class="btn btn-ghost btn-block btn-small" onclick="goToLogin()">Já tenho conta — Entrar</button>
+        <button class="btn btn-primary btn-block btn-small" onclick="openRegister('client')">Cadastrar</button>
+      </div>
+      <div class="loc-search-row">
+        <div class="location-pill" onclick="showScreen('select-city')">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s-7-6.1-7-11a7 7 0 0114 0c0 4.9-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>
+          <div class="loc-text"><small>Sua localização</small><strong id="home-location">Todo o Brasil</strong></div>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+        </div>
+        <div class="search-pill" onclick="openSearchScreen()">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--ink-faint)" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3-3"/></svg>
+          <span>O que você precisa?</span>
+        </div>
+      </div>
+
+      <div class="hero-banner">
+        <div class="hero-text">
+          <h2 id="home-greeting">Encontre profissionais <b>confiáveis</b> e perto de você.</h2>
+          <div class="hero-features">
+            <div class="hf"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg><span>Profissionais verificados</span></div>
+            <div class="hf"><svg width="16" height="16" viewBox="0 0 24 24" fill="#fff" stroke="none"><path d="M12 2l2.9 6.3 6.9.8-5.1 4.7 1.4 6.8L12 17l-6.1 3.6 1.4-6.8-5.1-4.7 6.9-.8z"/></svg><span>Avaliações reais</span></div>
+            <div class="hf"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M4 10h16"/></svg><span>Pagamento seguro</span></div>
+          </div>
+          <button class="btn btn-primary hero-cta" onclick="openSearchScreen()">Quero contratar</button>
+        </div>
+      </div>
+
+      <div id="home-banner-top"></div>
+
+      <div class="section-title"><h3>Categorias</h3><span class="see-all" onclick="openSearchScreen()">Ver todas <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 18l6-6-6-6"/></svg></span></div>
+      <div class="chip-grid" id="home-chip-grid"></div>
+
+      <div class="section-title"><h3>Como funciona?</h3></div>
+      <div class="how-it-works-row" id="how-it-works-row"></div>
+
+      <div class="section-title"><h3>Profissionais em destaque</h3><span class="see-all" onclick="showScreen('all-providers')">Ver todos <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 18l6-6-6-6"/></svg></span></div>
+      <div class="pro-scroll" id="featured-providers"></div>
+
+      <div id="home-banner-bottom"></div>
+
+      <div class="feature-strip">
+        <div class="fs-item"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--navy)" stroke-width="2"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg><span>Profissionais<br>verificados</span></div>
+        <div class="fs-item"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--navy)" stroke-width="2"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18"/></svg><span>Pagamento<br>seguro</span></div>
+        <div class="fs-item"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--navy)" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg><span>Suporte<br>24h</span></div>
+        <div class="fs-item"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--navy)" stroke-width="2"><circle cx="12" cy="9" r="5"/><path d="M8.5 13.5L7 22l5-3 5 3-1.5-8.5"/></svg><span>Satisfação<br>garantida</span></div>
+      </div>
+    </div>
+    <div class="toolbox-nav" id="client-nav"></div>
+  </section>
+
+  <!-- NOTIFICAÇÕES -->
+  <section class="screen" data-screen="notifications">
+    <div class="back-row">
+      <button class="back-btn" onclick="showScreen(homeScreenId())">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <h2>Notificações</h2>
+      <span class="link-btn" style="margin-left:auto;" onclick="markAllNotificationsRead()">Marcar tudo como lido</span>
+    </div>
+    <div class="screen-scroll" id="notifications-list"></div>
+  </section>
+
+  <!-- ESCOLHER CIDADE -->
+  <section class="screen" data-screen="select-city">
+    <div class="back-row">
+      <button class="back-btn" onclick="showScreen(homeScreenId())">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <h2>Sua localização</h2>
+    </div>
+    <div class="screen-scroll">
+      <p style="font-size:12.5px;color:var(--ink-soft);margin-top:0;">Escolha sua cidade pra ver anunciantes e promoções da sua região.</p>
+      <div class="search-filter-row">
+        <div class="search-box">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--ink-faint)" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3-3"/></svg>
+          <input type="text" id="select-city-search" placeholder="Buscar cidade..." oninput="filterCityList(this.value)">
+        </div>
+      </div>
+      <div id="select-city-list"></div>
+      <button class="btn btn-ghost btn-block" style="margin-top:10px;" onclick="clearCitySelection()">Ver todo o Brasil (limpar cidade)</button>
+    </div>
+  </section>
+
+  <!-- BUSCA -->
+  <section class="screen" data-screen="search">
+    <div class="back-row">
+      <button class="back-btn" onclick="showScreen('home')">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <h2>Buscar serviço</h2>
+    </div>
+    <div style="padding:14px 20px 0;">
+      <div class="search-filter-row">
+        <div class="search-box">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--ink-faint)" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3-3"/></svg>
+          <input type="text" id="service-search-input" placeholder="Ex: limpeza, jardim, eletricista..." oninput="filterSearch(this.value)">
+        </div>
+      </div>
+    </div>
+    <div class="screen-scroll">
+      <div id="search-results" class="chip-grid"></div>
+    </div>
+  </section>
+
+  <!-- PEDIR ORÇAMENTO -->
+  <section class="screen" data-screen="request">
+    <div class="back-row">
+      <button class="back-btn" onclick="showScreen('home')">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <h2>Pedir orçamento</h2>
+    </div>
+    <div class="screen-scroll">
+      <div id="req-rebook-notice" class="fee-note" style="display:none;">
+        <span>🔁</span>
+        <span id="req-rebook-notice-text"></span>
+      </div>
+      <div class="field"><label>Serviço</label><input id="req-service" type="text"></div>
+      <div class="field" id="req-common-services-field" style="display:none;">
+        <label>Serviços mais pedidos nessa categoria</label>
+        <div class="chip-select" id="req-common-services"></div>
+      </div>
+      <div class="field"><label>Descreva o que precisa</label><textarea id="req-description" rows="4" placeholder="Ex: apartamento de 2 quartos, limpeza pesada"></textarea></div>
+      <div id="req-trip-field" style="display:none;">
+        <div class="field"><label>Endereço de origem</label><input id="req-trip-origin" placeholder="Ex: Rua A, 123 - Centro, Marmeleiro/PR"></div>
+        <div class="field"><label>Endereço de destino</label><input id="req-trip-destination" placeholder="Ex: Rua B, 456 - Centro, Francisco Beltrão/PR"></div>
+        <div class="field"><label>Detalhes do frete/mudança/viagem</label><textarea id="req-trip-details" rows="3" placeholder="Ex: sofá, geladeira e 10 caixas · ou · 2 passageiros, viagem de ida e volta"></textarea></div>
+        <p style="font-size:11.5px;color:var(--ink-faint);margin-top:-6px;">Isso ajuda o prestador a calcular a distância e já enviar um orçamento certo.</p>
+      </div>
+      <div class="field">
+        <label>Fotos do local (opcional)</label>
+        <div class="upload-box">
+          Toque para adicionar fotos
+          <input type="file" id="req-photos" accept="image/*" multiple>
+        </div>
+      </div>
+      <div class="field"><label>CEP</label><input id="req-zip" placeholder="00000000" oninput="autoFillCep(this.value, 'request')"></div>
+      <div style="display:flex;gap:10px;">
+        <div class="field" style="flex:1;"><label>Bairro</label><input id="req-neighborhood"></div>
+        <div class="field" style="flex:1;"><label>Cidade</label><input id="req-city"></div>
+      </div>
+      <input type="hidden" id="req-state">
+      <button class="btn btn-primary btn-block" onclick="createRequest(this)">Enviar solicitação</button>
+      <div class="error-msg" id="request-error"></div>
+      <p style="text-align:center;font-size:12px;color:var(--ink-faint);margin-top:12px;">O endereço completo (rua e número) você informa depois que aceitar uma proposta e pagar. Prestadores interessados vão enviar propostas com preço e disponibilidade.</p>
+    </div>
+  </section>
+
+  <!-- PROPOSTAS -->
+  <section class="screen" data-screen="proposals">
+    <div class="back-row">
+      <button class="back-btn" onclick="showScreen('my-requests')">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <h2>Propostas recebidas</h2>
+    </div>
+    <div class="screen-scroll">
+      <p style="font-size:12.5px;color:var(--ink-soft);margin-top:0;" id="proposals-subtitle"></p>
+      <div id="proposals-list"></div>
+      <button class="btn btn-ghost btn-block" id="cancel-request-btn" style="margin-top:16px;color:var(--danger);border-color:var(--danger);" onclick="cancelRequest()">Cancelar pedido</button>
+    </div>
+  </section>
+
+  <!-- PERFIL DO PRESTADOR (visto pelo cliente) -->
+  <section class="screen" data-screen="provider-view">
+    <div class="back-row">
+      <button class="back-btn" onclick="showScreen(providerViewReturnScreen)">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <h2>Perfil</h2>
+    </div>
+    <div class="screen-scroll" id="provider-view-content"></div>
+  </section>
+
+  <!-- PAGAMENTO -->
+  <section class="screen" data-screen="payment">
+    <div class="back-row">
+      <button class="back-btn" onclick="showScreen('my-requests')">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <h2>Pagamento</h2>
+    </div>
+    <div class="screen-scroll">
+      <div class="pay-summary">
+        <div class="pay-total-label">Valor total do serviço</div>
+        <div class="pay-total" id="pay-total">R$ 0,00</div>
+        <div style="font-size:12.5px;color:var(--ink-soft);margin-top:8px;" id="pay-details"></div>
+        <div id="pay-discount-row" style="display:none;font-size:13px;color:var(--success);font-weight:700;margin-top:8px;"></div>
+        <div id="pay-credit-row" style="display:none;font-size:13px;color:var(--success);font-weight:700;margin-top:8px;"></div>
+      </div>
+
+      <div class="section-title"><h3>Cupom de desconto</h3></div>
+      <div style="display:flex;gap:8px;margin-bottom:6px;">
+        <input id="coupon-input" placeholder="Código do cupom" style="flex:1;border:1.5px solid var(--line);background:var(--card);border-radius:11px;padding:12px 14px;font-family:inherit;font-size:14.5px;text-transform:uppercase;">
+        <button class="btn btn-ghost" onclick="applyCoupon()">Aplicar</button>
+      </div>
+      <div class="error-msg" id="coupon-error" style="margin-top:0;margin-bottom:14px;"></div>
+
+      <div class="section-title"><h3>Forma de pagamento</h3></div>
+      <div class="pay-method selected" data-method="pix" onclick="selectPayMethod(this)">
+        <div class="pm-name">Pix</div>
+        <div class="pm-dot"></div>
+      </div>
+      <div class="pay-method" data-method="credit_card" onclick="selectPayMethod(this)">
+        <div class="pm-name">Cartão de crédito</div>
+        <div class="pm-dot"></div>
+      </div>
+
+      <div id="card-fields" style="display:none;">
+        <div class="field"><label>Número do cartão</label><input id="card-number" placeholder="0000 0000 0000 0000"></div>
+        <div class="field"><label>Nome no cartão</label><input id="card-holder"></div>
+        <div style="display:flex;gap:10px;">
+          <div class="field" style="flex:1;"><label>Validade (MM/AAAA)</label><input id="card-expiry" placeholder="12/2030"></div>
+          <div class="field" style="width:90px;"><label>CVV</label><input id="card-cvv" placeholder="123"></div>
+        </div>
+        <div class="field"><label>CEP</label><input id="card-zip" placeholder="00000000"></div>
+        <div class="field" id="installments-field" style="display:none;">
+          <label>Parcelamento</label>
+          <select id="installments-select" onchange="updateInstallmentsPreview()">
+            <option value="1">À vista</option>
+            <option value="2">2x</option>
+            <option value="3">3x</option>
+            <option value="4">4x</option>
+            <option value="5">5x</option>
+            <option value="6">6x</option>
+          </select>
+          <div style="font-size:12px;color:var(--ink-soft);margin-top:4px;" id="installments-preview"></div>
+        </div>
+      </div>
+
+      <div class="fee-note">
+        <span>🔒</span>
+        <span>Priorize pagar sempre pelo NEXSERV: seu dinheiro fica protegido e só é liberado ao prestador depois que o serviço for concluído e aprovado por você. Pagamento combinado fora da plataforma não tem essa proteção.</span>
+      </div>
+
+      <button class="btn btn-primary btn-block" id="confirm-payment-btn" onclick="confirmPayment()">Pagar e confirmar serviço</button>
+      <div class="error-msg" id="payment-error"></div>
+
+      <p style="text-align:center;font-size:11.5px;color:var(--ink-faint);margin-top:14px;">Pagamento processado com segurança por Asaas</p>
+    </div>
+  </section>
+
+  <!-- CONFIRMAÇÃO -->
+  <section class="screen" data-screen="confirm">
+    <div class="back-row">
+      <button class="back-btn" onclick="setTab(user.role === 'provider' ? 'provider-jobs' : 'my-requests')">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+    </div>
+    <div class="screen-scroll">
+      <div class="confirm-hero">
+        <div class="confirm-check">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 13l4 4L19 7"/></svg>
+        </div>
+        <h2 id="confirm-title">Pagamento confirmado</h2>
+        <p id="confirm-sub">O prestador foi avisado. Combine os detalhes finais pelo chat.</p>
+      </div>
+      <div id="qr-container"></div>
+      <div class="summary-list" id="confirm-summary"></div>
+      <div id="confirm-actions"></div>
+      <button class="btn btn-primary btn-block" id="confirm-chat-btn" onclick="openChatFromConfirm()">Enviar mensagem</button>
+      <button class="btn btn-ghost btn-block" style="margin-top:10px;" onclick="setTab(user.role === 'provider' ? 'provider-jobs' : 'my-requests')">Voltar</button>
+    </div>
+  </section>
+
+  <!-- AVALIAR SERVIÇO -->
+  <section class="screen" data-screen="rate-service">
+    <div class="back-row">
+      <h2>Como foi o serviço?</h2>
+    </div>
+    <div class="screen-scroll">
+      <p style="font-size:13px;color:var(--ink-soft);text-align:center;" id="rate-service-provider-name"></p>
+      <div class="star-picker" id="rate-service-stars" style="display:flex;justify-content:center;gap:10px;font-size:38px;margin:20px 0;">
+        <span class="star-opt" data-value="1" onclick="setServiceRating(1)">☆</span>
+        <span class="star-opt" data-value="2" onclick="setServiceRating(2)">☆</span>
+        <span class="star-opt" data-value="3" onclick="setServiceRating(3)">☆</span>
+        <span class="star-opt" data-value="4" onclick="setServiceRating(4)">☆</span>
+        <span class="star-opt" data-value="5" onclick="setServiceRating(5)">☆</span>
+      </div>
+      <div class="field"><label>Comentário (opcional)</label><textarea id="rate-service-comment" rows="4" placeholder="Conte como foi sua experiência"></textarea></div>
+      <button class="btn btn-primary btn-block" onclick="submitServiceRating()">Enviar avaliação</button>
+      <button class="btn btn-ghost btn-block" style="margin-top:10px;" onclick="setTab('my-requests')">Pular</button>
+      <div class="error-msg" id="rate-service-error"></div>
+    </div>
+  </section>
+
+  <!-- MINHAS SOLICITAÇÕES -->
+  <section class="screen" data-screen="my-requests">
+    <div class="topbar"><h2>Minhas solicitações</h2></div>
+    <div class="screen-scroll">
+      <div class="filter-tabs" id="my-requests-filter-tabs"></div>
+      <div id="my-requests-list"></div>
+    </div>
+    <div class="toolbox-nav" id="my-requests-nav"></div>
+  </section>
+
+  <!-- PRESTADOR AGUARDANDO EXPANSÃO NA CIDADE -->
+  <section class="screen" data-screen="provider-waiting-expansion">
+    <div class="topbar" style="justify-content:center;">
+      <div class="brand"><img src="logo-horizontal.png" alt="NEXSERV"></div>
+    </div>
+    <div class="screen-scroll" style="display:flex;flex-direction:column;align-items:center;text-align:center;padding:48px 28px;">
+      <div style="font-size:48px;margin-bottom:16px;">🚀</div>
+      <h3 style="font-size:18px;margin-bottom:8px;">Ainda não chegamos aí</h3>
+      <p style="font-size:13.5px;color:var(--ink-soft);line-height:1.6;max-width:320px;">
+        Seu cadastro foi recebido! Estamos expandindo aos poucos e em breve a NEXSERV vai chegar em
+        <strong id="waiting-expansion-city">sua cidade</strong>. Assim que abrirmos por aí, avisamos você por
+        e-mail e você já pode completar sua verificação e começar a receber pedidos.
+      </p>
+      <button class="btn btn-ghost" style="margin-top:28px;" onclick="setTab('profile')">Ver meu perfil</button>
+    </div>
+  </section>
+
+  <!-- HOME PRESTADOR -->
+  <section class="screen" data-screen="provider-home">
+    <div class="topbar">
+      <div class="brand"><img src="logo-horizontal.png" alt="NEXSERV"></div>
+      <div style="display:flex;align-items:center;gap:4px;">
+        <button class="topbar-icon-btn" onclick="openNotifications()">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+          <span class="topbar-badge" id="notif-badge-provider" style="display:none;">0</span>
+        </button>
+        <img class="topbar-avatar" id="provider-home-avatar" onclick="setTab('profile')" style="cursor:pointer;">
+      </div>
+    </div>
+    <div class="screen-scroll">
+      <div class="section-title" style="margin-top:8px;"><h3 id="provider-home-name">—</h3></div>
+      <div id="verification-banner"></div>
+      <div id="subscription-promo-banner"></div>
+      <div id="provider-banner-top"></div>
+      <div class="section-title"><h3>Pedidos disponíveis</h3></div>
+      <div id="open-requests-list"></div>
+      <div id="provider-banner-bottom"></div>
+    </div>
+    <div class="toolbox-nav" id="provider-nav"></div>
+  </section>
+
+  <!-- ENVIAR PROPOSTA -->
+  <section class="screen" data-screen="submit-proposal">
+    <div class="back-row">
+      <button class="back-btn" onclick="setTab('provider-home')">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <h2 id="submit-proposal-title">Enviar proposta</h2>
+    </div>
+    <div class="screen-scroll">
+      <div class="req-card" style="cursor:default;" id="submit-proposal-summary"></div>
+      <button class="btn btn-ghost btn-block" id="proposal-ask-question-btn" style="display:none;margin-bottom:14px;" onclick="askClientQuestionFromProposal()">💬 Tirar dúvida com o cliente antes de orçar</button>
+      <div class="field">
+        <label>Seu valor (R$)</label>
+        <input type="text" inputmode="decimal" id="proposal-value" placeholder="0,00" oninput="formatMoneyInput(this)">
+        <p style="font-size:11.5px;color:var(--ink-faint);margin:4px 0 0;">Valor mínimo de R$ 100,00 por proposta.</p>
+      </div>
+      <div class="field">
+        <label>Disponibilidade</label>
+        <div class="chip-select" id="proposal-availability-chips" style="margin-bottom:8px;">
+          <div class="chip-opt" onclick="setProposalAvailabilityQuick('today', this)">Hoje</div>
+          <div class="chip-opt" onclick="setProposalAvailabilityQuick('tomorrow', this)">Amanhã</div>
+          <div class="chip-opt" onclick="setProposalAvailabilityQuick('week', this)">Essa semana</div>
+          <div class="chip-opt" onclick="setProposalAvailabilityQuick('nextweek', this)">Próxima semana</div>
+        </div>
+        <input type="datetime-local" id="proposal-availability">
+      </div>
+      <div class="field"><label>Observação (opcional)</label><textarea id="proposal-notes" rows="3" placeholder="Alguma informação extra sobre o orçamento?"></textarea></div>
+      <button class="btn btn-primary btn-block" id="submit-proposal-btn" onclick="submitProposal()">Enviar proposta</button>
+      <div class="error-msg" id="submit-proposal-error"></div>
+    </div>
+  </section>
+
+  <!-- VERIFICAÇÃO DE IDENTIDADE (PRESTADOR) -->
+  <section class="screen" data-screen="provider-verification">
+    <div class="back-row">
+      <button class="back-btn" onclick="setTab('provider-home')">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <h2>Verificação de identidade</h2>
+    </div>
+    <div class="screen-scroll">
+      <p style="font-size:12.5px;color:var(--ink-soft);margin-top:0;">Precisamos confirmar quem é você antes de liberar o aceite de pedidos. Isso protege você e os clientes da plataforma.</p>
+
+      <div class="field">
+        <label>Foto do documento (CNH ou RG) <span style="color:var(--danger);">*</span></label>
+        <div class="upload-box" id="verif-document-box">
+          Toque para adicionar a foto do documento (ou um PDF)
+          <input type="file" id="verif-document" accept="image/*,.pdf,application/pdf" onchange="previewVerificationFile('document')">
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Selfie seu rosto <span style="color:var(--danger);">*</span></label>
+        <p style="font-size:11.5px;color:var(--ink-soft);margin:-2px 0 6px;">Essa foto também vira sua foto de perfil, visível pros clientes.</p>
+        <div class="upload-box" id="verif-selfie-box">
+          Toque para tirar uma selfie ou escolher da galeria
+          <input type="file" id="verif-selfie" accept="image/*" onchange="previewVerificationFile('selfie')">
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Diploma ou certificado (opcional, reforça sua confiança)</label>
+        <div class="upload-box" id="verif-diploma-box">
+          Toque para adicionar um diploma/certificado (foto ou PDF)
+          <input type="file" id="verif-diploma" accept="image/*,.pdf,application/pdf" onchange="previewVerificationFile('diploma')">
+        </div>
+      </div>
+
+      <button class="btn btn-primary btn-block" id="verif-submit-btn" onclick="submitVerification()">Enviar verificação</button>
+      <div class="error-msg" id="verif-error"></div>
+    </div>
+  </section>
+
+  <!-- SACAR GANHOS -->
+  <section class="screen" data-screen="provider-withdraw">
+    <div class="back-row">
+      <button class="back-btn" onclick="setTab('provider-earnings')">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <h2>Sacar</h2>
+    </div>
+    <div class="screen-scroll">
+      <div class="earnings-summary-card">
+        <div class="section-title" style="margin:0;"><h3>Saldo disponível pra saque</h3></div>
+        <p style="font-size:12px;color:var(--ink-soft);margin:4px 0 0;">Já descontando saques em andamento.</p>
+        <div class="pay-total" id="withdraw-available" style="margin-top:8px;">R$ 0,00</div>
+      </div>
+
+      <div class="fee-note">
+        <span>⚡</span>
+        <span>Pagamento automático: assim que o cliente aprova a conclusão, seu pagamento via Pix já é encaminhado — cai na sua chave Pix logo após a aprovação da administração. Pagamento no cartão de crédito demora um pouco mais (até 2 dias úteis) porque o valor só fica disponível depois que a operadora do cartão libera.</span>
+      </div>
+
+      <div id="bank-account-section"></div>
+      <div id="withdraw-form-section" style="display:none;"></div>
+
+      <div class="section-title"><h3>Histórico de saques</h3></div>
+      <div id="withdrawals-history"></div>
+    </div>
+  </section>
+
+  <!-- PLANO PRO -->
+  <section class="screen" data-screen="provider-subscription">
+    <div class="back-row">
+      <button class="back-btn" onclick="setTab('provider-earnings')">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <h2>Plano PRO</h2>
+    </div>
+    <div class="screen-scroll">
+      <div class="coin-promo-banner">
+        <strong>Plano PRO NEXSERV</strong>
+        <p>Destaque automático, prioridade nos orçamentos e aviso instantâneo de pedido novo pelo WhatsApp.</p>
+      </div>
+
+      <div class="card" id="subscription-status-card" style="margin-bottom:16px;"></div>
+
+      <div id="subscription-stats-section"></div>
+
+      <div class="section-title"><h3>Benefícios</h3></div>
+      <div class="list-item">
+        <div class="icon" style="background:var(--purple-tint);color:var(--purple);">⭐</div>
+        <div class="txt"><strong>Destaque automático</strong><span>Seu perfil sempre em destaque na home, sem gastar moedas</span></div>
+      </div>
+      <div class="list-item">
+        <div class="icon" style="background:var(--purple-tint);color:var(--purple);">🚀</div>
+        <div class="txt"><strong>Prioridade nos orçamentos</strong><span>Suas propostas aparecem primeiro pro cliente</span></div>
+      </div>
+      <div class="list-item">
+        <div class="icon" style="background:var(--purple-tint);color:var(--purple);">⚡</div>
+        <div class="txt"><strong>Aviso instantâneo</strong><span>Pedido novo na sua categoria chega direto no seu WhatsApp, na hora</span></div>
+      </div>
+      <div class="list-item">
+        <div class="icon" style="background:var(--purple-tint);color:var(--purple);">📞</div>
+        <div class="txt"><strong>Contato do cliente liberado</strong><span>Telefone liberado automaticamente após o pagamento — até 15 contatos grátis por mês; depois disso, 100 moedas por contato extra</span></div>
+      </div>
+      <div class="list-item">
+        <div class="icon" style="background:var(--purple-tint);color:var(--purple);">💰</div>
+        <div class="txt"><strong>Controle financeiro completo</strong><span>Receita, despesas por categoria e resultado por dia, semana, mês ou ano</span></div>
+      </div>
+      <div class="list-item">
+        <div class="icon" style="background:var(--purple-tint);color:var(--purple);">📊</div>
+        <div class="txt"><strong>Painel de desempenho</strong><span>Visualizações do perfil e taxa de conversão das suas propostas</span></div>
+      </div>
+      <div class="list-item">
+        <div class="icon" style="background:var(--purple-tint);color:var(--purple);">🏅</div>
+        <div class="txt"><strong>Selo PRO</strong><span>Aparece no seu perfil e nas suas propostas pro cliente</span></div>
+      </div>
+
+      <div class="section-title"><h3>Assinar / renovar</h3></div>
+      <div class="pay-method selected" data-method="pix" onclick="selectSubscriptionPayMethod(this)">
+        <div class="pm-name">Pix</div><div class="pm-dot"></div>
+      </div>
+      <div class="pay-method" data-method="credit_card" onclick="selectSubscriptionPayMethod(this)">
+        <div class="pm-name">Cartão de crédito</div><div class="pm-dot"></div>
+      </div>
+      <div id="subscription-card-fields" style="display:none;">
+        <div class="field"><label>Número do cartão</label><input id="subscription-card-number" placeholder="0000 0000 0000 0000"></div>
+        <div class="field"><label>Nome no cartão</label><input id="subscription-card-holder"></div>
+        <div style="display:flex;gap:10px;">
+          <div class="field" style="flex:1;"><label>Validade (MM/AAAA)</label><input id="subscription-card-expiry" placeholder="12/2030"></div>
+          <div class="field" style="width:90px;"><label>CVV</label><input id="subscription-card-cvv" placeholder="123"></div>
+        </div>
+        <div class="field"><label>CEP</label><input id="subscription-card-zip" placeholder="00000000"></div>
+      </div>
+      <button class="btn btn-primary btn-block" id="subscription-confirm-btn" onclick="confirmSubscriptionPurchase()">Assinar por R$ 49,90/mês</button>
+      <div id="subscription-qr-container"></div>
+      <div class="error-msg" id="subscription-purchase-error"></div>
+    </div>
+  </section>
+
+  <!-- CATEGORIAS DO PRESTADOR -->
+  <section class="screen" data-screen="provider-categories">
+    <div class="back-row">
+      <button class="back-btn" onclick="setTab('profile')">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <h2>Categorias que atendo</h2>
+    </div>
+    <div class="screen-scroll">
+      <div class="section-title"><h3>Cidade de atuação</h3></div>
+      <p style="font-size:12.5px;color:var(--ink-soft);margin-top:0;">Usamos sua cidade pra te avisar quando surgir um pedido perto de você.</p>
+      <div style="display:flex;gap:10px;">
+        <div class="field" style="flex:2;"><label>Cidade</label><input id="provider-profile-city"></div>
+        <div class="field" style="flex:1;"><label>UF</label><input id="provider-profile-state" maxlength="2" style="text-transform:uppercase;"></div>
+      </div>
+      <button class="btn btn-ghost btn-block btn-small" onclick="saveProviderCity()">Salvar cidade</button>
+      <div class="error-msg" id="provider-city-error"></div>
+
+      <div class="section-title" style="margin-top:24px;"><h3>Cidades onde você atende</h3></div>
+      <p style="font-size:12.5px;color:var(--ink-soft);margin-top:0;">Além da sua cidade, marque outras cidades pra receber avisos de pedidos nelas também.</p>
+      <div class="chip-select" id="provider-service-city-chips"></div>
+      <button class="btn btn-ghost btn-block btn-small" style="margin-top:10px;" onclick="saveProviderServiceCities()">Salvar cidades que atendo</button>
+      <div class="error-msg" id="provider-service-cities-error"></div>
+
+      <div class="section-title" style="margin-top:24px;"><h3>Categorias que atendo</h3></div>
+      <p style="font-size:12.5px;color:var(--ink-soft);margin-top:0;">Toque pra selecionar ou remover. Você pode atualizar isso quando quiser.</p>
+      <input type="text" id="provider-category-search" placeholder="Buscar categoria..." oninput="renderProviderCategoryChips(categoriesCache)" style="margin-bottom:10px;">
+      <div class="chip-select" id="provider-category-chips"></div>
+      <button class="btn btn-primary btn-block" style="margin-top:20px;" onclick="saveProviderCategories()">Salvar categorias</button>
+      <div class="error-msg" id="provider-categories-error"></div>
+    </div>
+  </section>
+
+  <!-- PARCELAMENTO DO PRESTADOR -->
+  <section class="screen" data-screen="provider-installments">
+    <div class="back-row">
+      <button class="back-btn" onclick="setTab('profile')">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <h2>Parcelamento</h2>
+    </div>
+    <div class="screen-scroll">
+      <p style="font-size:12.5px;color:var(--ink-soft);margin-top:0;">Permita que clientes parcelem em até <span id="installments-max-label">6</span>x no cartão pedidos acima de <span id="installments-min-label">R$ 300</span>. Você recebe exatamente como se fosse uma venda à vista normal — a taxa extra de parcelar (antecipação) é paga pelo cliente, embutida no valor do cartão dele, não descontada de você.</p>
+
+      <div class="card" style="margin:16px 0;">
+        <div style="display:flex;align-items:center;justify-content:space-between;">
+          <div>
+            <strong style="font-size:14.5px;">Permitir parcelamento</strong>
+            <div style="font-size:12px;color:var(--ink-soft);">Vale pra todos os seus serviços elegíveis</div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="installments-toggle" onchange="toggleInstallmentsSetting()">
+            <span class="switch-track"></span>
+          </label>
+        </div>
+      </div>
+
+      <div class="section-title"><h3>Taxas de hoje</h3></div>
+      <p style="font-size:12px;color:var(--ink-soft);margin-top:-4px;">Sua taxa exata sempre aparece no detalhamento de cada pagamento — os valores abaixo são as taxas contratadas com a Asaas.</p>
+      <div class="summary-list">
+        <div class="summary-row"><span>Pix</span><span>Sem taxa (absorvida pela plataforma)</span></div>
+        <div class="summary-row"><span>Cartão à vista</span><span>2,99% + R$ 0,49</span></div>
+        <div class="summary-row"><span>Antecipação do cartão à vista</span><span>+ 1,6% ao mês</span></div>
+        <div class="summary-row"><span>Cartão parcelado (2x a 6x)</span><span>3,49% + R$ 0,49 por parcela</span></div>
+        <div class="summary-row"><span>Transferência do saque</span><span>R$ 5,00 por saque</span></div>
+      </div>
+      <p style="font-size:11px;color:var(--ink-faint);margin-top:10px;">A Asaas libera o valor do cartão à vista antes do prazo normal (antecipação automática) — esse custo é seu, descontado junto com a taxa de processamento no seu repasse. No parcelado, a antecipação é paga pelo cliente, não afeta seu repasse. A taxa de transferência (R$ 5,00) já é descontada automaticamente do valor de cada saque solicitado.</p>
+      <div class="error-msg" id="installments-error"></div>
+    </div>
+  </section>
+
+  <!-- FOTOS E DESCRIÇÃO DO PRESTADOR -->
+  <section class="screen" data-screen="provider-portfolio">
+    <div class="back-row">
+      <button class="back-btn" onclick="setTab('profile')">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <h2>Fotos e sobre você</h2>
+    </div>
+    <div class="screen-scroll">
+      <div class="section-title" style="margin-top:0;"><h3>Descrição dos seus serviços</h3></div>
+      <p style="font-size:12.5px;color:var(--ink-soft);margin-top:0;">Conte pro cliente o que você faz, sua experiência, diferenciais. Aparece no seu perfil público.</p>
+      <div class="field">
+        <textarea id="provider-bio-input" maxlength="500" rows="4" placeholder="Ex: Sou eletricista há 10 anos, atendo residências e comércios, especialista em instalações e manutenção preventiva."></textarea>
+      </div>
+      <button class="btn btn-ghost btn-block btn-small" onclick="saveProviderBio()">Salvar descrição</button>
+      <div class="error-msg" id="provider-bio-error"></div>
+
+      <div class="section-title" style="margin-top:24px;"><h3>Fotos dos serviços</h3></div>
+      <p style="font-size:12.5px;color:var(--ink-soft);margin-top:0;">Mostre exemplos de trabalhos que você já realizou. É opcional, mas ajuda o cliente a decidir contratar você. Máximo de 6 fotos.</p>
+      <div class="field">
+        <div class="upload-box" id="portfolio-upload-box">
+          Toque para adicionar uma foto
+          <input type="file" id="portfolio-file" accept="image/*" onchange="uploadPortfolioPhotoFile(this)">
+        </div>
+      </div>
+      <div class="portfolio-grid" id="portfolio-grid"></div>
+      <div class="error-msg" id="portfolio-error"></div>
+    </div>
+  </section>
+
+  <!-- TRABALHOS DO PRESTADOR -->
+  <section class="screen" data-screen="provider-jobs">
+    <div class="topbar"><h2>Meus trabalhos</h2></div>
+    <div class="screen-scroll">
+      <div class="role-toggle">
+        <button type="button" class="active" id="jobs-tab-active" onclick="setJobsTab('active')">Em andamento</button>
+        <button type="button" id="jobs-tab-proposals" onclick="setJobsTab('proposals')">Minhas propostas</button>
+      </div>
+      <div id="provider-jobs-list"></div>
+    </div>
+    <div class="toolbox-nav" id="provider-jobs-nav"></div>
+  </section>
+
+  <!-- GANHOS / CARTEIRA -->
+  <section class="screen" data-screen="provider-earnings">
+    <div class="screen-scroll">
+      <div class="topbar" style="padding-left:0;padding-right:0;border:none;"><h2>Painel do prestador</h2></div>
+
+      <div class="provider-hero-dark">
+        <div class="top-row">
+          <img class="avatar-lg" id="earnings-avatar">
+          <div class="info">
+            <h3 id="earnings-provider-name">—</h3>
+            <span id="earnings-provider-role">Prestador de serviços</span>
+          </div>
+          <div class="level">
+            <div class="lab">Nível</div>
+            <div class="val" id="earnings-level">Bronze</div>
+          </div>
+        </div>
+        <div class="mini-stats" id="earnings-mini-stats"></div>
+      </div>
+
+      <div class="role-toggle">
+        <button type="button" class="active" id="earnings-tab-summary" onclick="setEarningsTab('summary')">Ganhos</button>
+        <button type="button" id="earnings-tab-dre" onclick="setEarningsTab('dre')">Financeiro</button>
+        <button type="button" id="earnings-tab-wallet" onclick="setEarningsTab('wallet')">Carteira</button>
+      </div>
+
+      <div id="earnings-summary-pane">
+        <div class="earnings-summary-card">
+          <div class="section-title" style="margin:0;"><h3>Resumo de ganhos</h3></div>
+          <p style="font-size:12px;color:var(--ink-soft);margin:4px 0 0;">Valores ficam retidos até você marcar como entregue e o cliente aprovar.</p>
+          <div class="grid3">
+            <div><div class="g-lab">Liberado</div><div class="g-val" id="earnings-released">R$ 0</div></div>
+            <div><div class="g-lab">Retido</div><div class="g-val" id="earnings-held">R$ 0</div></div>
+          </div>
+        </div>
+        <button class="btn btn-primary btn-block" style="margin:14px 0;" onclick="showScreen('provider-withdraw')">💵 Sacar meus ganhos</button>
+        <div class="section-title"><h3>Extrato</h3></div>
+        <div id="earnings-list"></div>
+      </div>
+
+      <div id="dre-pane" style="display:none;">
+        <div id="dre-upsell" style="display:none;"></div>
+        <div id="dre-content">
+          <div class="role-toggle">
+            <button type="button" class="active" id="dre-tab-day" onclick="setDrePeriod('day')">Hoje</button>
+            <button type="button" id="dre-tab-week" onclick="setDrePeriod('week')">7 dias</button>
+            <button type="button" id="dre-tab-month" onclick="setDrePeriod('month')">Mês</button>
+            <button type="button" id="dre-tab-year" onclick="setDrePeriod('year')">Ano</button>
+          </div>
+          <div class="stat-grid">
+            <div class="stat-box"><div class="num" id="dre-revenue">R$ 0</div><div class="lab">Receita</div></div>
+            <div class="stat-box"><div class="num" id="dre-expenses">R$ 0</div><div class="lab">Despesas</div></div>
+            <div class="stat-box" style="grid-column:span 2;"><div class="num" id="dre-result">R$ 0</div><div class="lab">Resultado</div></div>
+          </div>
+
+          <div class="section-title"><h3>Lançar despesa</h3></div>
+          <div class="field"><label>Descrição</label><input id="expense-description" placeholder="Ex: material de limpeza"></div>
+          <div style="display:flex;gap:10px;">
+            <div class="field" style="flex:1;"><label>Valor (R$)</label><input type="number" id="expense-amount"></div>
+            <div class="field" style="flex:1;"><label>Data</label><input type="date" id="expense-date"></div>
+          </div>
+          <div class="field">
+            <label>Categoria</label>
+            <select id="expense-category">
+              <option value="material">Material</option>
+              <option value="transporte">Transporte</option>
+              <option value="ferramentas">Ferramentas</option>
+              <option value="marketing">Marketing</option>
+              <option value="outros" selected>Outros</option>
+            </select>
+          </div>
+          <button class="btn btn-primary btn-block btn-small" onclick="addExpense()">Adicionar despesa</button>
+          <div class="error-msg" id="expense-error"></div>
+
+          <div class="section-title"><h3>Despesas por categoria</h3></div>
+          <div id="dre-category-breakdown"></div>
+
+          <div class="section-title"><h3>Receitas do período</h3></div>
+          <div id="dre-revenue-list"></div>
+          <div class="section-title"><h3>Despesas do período</h3></div>
+          <div id="dre-expenses-list"></div>
+        </div>
+      </div>
+
+      <div id="wallet-pane" style="display:none;">
+        <div class="coin-promo-banner">
+          <strong>Moedas NEXSERV</strong>
+          <p>Use suas moedas para aparecer em destaque nas propostas e para desbloquear o contato de clientes.</p>
+          <div class="stat-grid">
+            <div class="stat-box" style="background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.15);">
+              <div class="num" id="coins-balance" style="color:#fff;">0</div><div class="lab" style="color:#D8CBAE;">Moedas disponíveis</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="section-title"><h3>Destacar meu perfil</h3></div>
+        <div class="card" id="feature-status-card" style="margin-bottom:16px;"></div>
+
+        <div class="section-title"><h3>Comprar moedas</h3></div>
+        <div id="coin-packages"></div>
+
+        <div id="coin-payment-form" style="display:none;">
+          <div class="section-title"><h3>Forma de pagamento</h3></div>
+          <div class="pay-method selected" data-method="pix" onclick="selectCoinPayMethod(this)">
+            <div class="pm-name">Pix</div><div class="pm-dot"></div>
+          </div>
+          <div class="pay-method" data-method="credit_card" onclick="selectCoinPayMethod(this)">
+            <div class="pm-name">Cartão de crédito</div><div class="pm-dot"></div>
+          </div>
+          <div id="coin-card-fields" style="display:none;">
+            <div class="field"><label>Número do cartão</label><input id="coin-card-number" placeholder="0000 0000 0000 0000"></div>
+            <div class="field"><label>Nome no cartão</label><input id="coin-card-holder"></div>
+            <div style="display:flex;gap:10px;">
+              <div class="field" style="flex:1;"><label>Validade (MM/AAAA)</label><input id="coin-card-expiry" placeholder="12/2030"></div>
+              <div class="field" style="width:90px;"><label>CVV</label><input id="coin-card-cvv" placeholder="123"></div>
+            </div>
+            <div class="field"><label>CEP</label><input id="coin-card-zip" placeholder="00000000"></div>
+          </div>
+          <button class="btn btn-primary btn-block" onclick="confirmCoinPurchase()">Comprar</button>
+          <div id="coin-qr-container"></div>
+          <div class="error-msg" id="coin-purchase-error"></div>
+        </div>
+
+        <div class="section-title"><h3>Mais opções</h3></div>
+        <div class="list-item" onclick="showScreen('provider-withdraw')">
+          <div class="icon" style="background:var(--success-tint);color:var(--success);">💵</div>
+          <div class="txt"><strong>Sacar</strong><span>Transferir seus ganhos para sua conta bancária</span></div>
+          <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+        </div>
+        <div class="list-item" onclick="showScreen('provider-subscription'); loadSubscriptionStatus();">
+          <div class="icon" style="background:var(--purple-tint);color:var(--purple);">⭐</div>
+          <div class="txt"><strong>Plano PRO</strong><span>Destaque automático, prioridade e aviso instantâneo no WhatsApp</span></div>
+          <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+        </div>
+      </div>
+
+      <div class="section-title"><h3>Desempenho (7 dias)</h3></div>
+      <div class="stat-grid cols-4" id="provider-dashboard-stats"></div>
+    </div>
+    <div class="toolbox-nav" id="provider-earnings-nav"></div>
+  </section>
+
+  <!-- MENSAGENS (lista de conversas) -->
+  <section class="screen" data-screen="messages">
+    <div class="topbar"><h2>Mensagens</h2></div>
+    <div style="padding:14px 20px 0;">
+      <div class="search-filter-row">
+        <div class="search-box">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--ink-faint)" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3-3"/></svg>
+          <input type="text" id="messages-search-input" placeholder="Buscar conversa..." oninput="loadConversations()">
+        </div>
+      </div>
+      <div class="filter-tabs">
+        <button class="active" id="msg-tab-all" onclick="setMessagesTab('all')">Todas</button>
+        <button id="msg-tab-unread" onclick="setMessagesTab('unread')">Não lidas</button>
+        <button id="msg-tab-archived" onclick="setMessagesTab('archived')">Arquivadas</button>
+      </div>
+    </div>
+    <div class="screen-scroll" style="padding-top:0;">
+      <div id="conversations-list"></div>
+    </div>
+    <div class="toolbox-nav" id="messages-nav"></div>
+  </section>
+
+  <!-- CHAT INDIVIDUAL -->
+  <section class="screen" data-screen="chat-thread">
+    <div class="back-row" style="padding-bottom:12px;">
+      <button class="back-btn" onclick="setTab('messages')">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <div class="avatar" id="chat-avatar" style="width:38px;height:38px;font-size:13px;border-radius:50%;">?</div>
+      <div style="flex:1;"><strong id="chat-name" style="font-size:14.5px;">—</strong></div>
+      <button class="link-btn" onclick="remindProviderSlow()" id="chat-remind-provider-btn" style="display:none;margin-right:10px;">🔔 Cutucar</button>
+      <button class="link-btn" onclick="archiveCurrentChat()" id="chat-archive-btn">Arquivar</button>
+    </div>
+    <div class="chat-service-card" id="chat-service-card" style="display:none;"></div>
+    <div id="chat-payment-notice" class="fee-note" style="display:none;margin:0 16px 10px;">
+      <span>🔒</span>
+      <span>Combine o dia por aqui, mas priorize pagar pelo NEXSERV — seu dinheiro fica protegido até o serviço ser concluído.</span>
+    </div>
+    <div id="chat-no-contact-notice" class="fee-note" style="display:none;margin:0 16px 10px;background:var(--warning-tint);color:#92400E;">
+      <span>⚠️</span>
+      <span>Telefone, e-mail e CEP são removidos automaticamente e ficam registrados. Combinar contato fora do app pode gerar penalidade na conta.</span>
+    </div>
+    <div class="chat-body" id="chat-body"></div>
+    <div class="chat-input-row">
+      <input type="text" id="chat-input" placeholder="Escreva uma mensagem..." onkeydown="if(event.key==='Enter')sendMessage()">
+      <button class="send-btn" onclick="sendMessage()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+      </button>
+    </div>
+  </section>
+
+  <!-- PERFIL -->
+  <section class="screen" data-screen="profile">
+    <div class="topbar"><h2>Perfil</h2></div>
+    <div class="screen-scroll">
+      <div class="profile-hero">
+        <div class="avatar-wrap">
+          <img class="avatar-lg" id="profile-avatar">
+          <div class="cam-btn" onclick="document.getElementById('profile-photo-file').click()">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
+          </div>
+          <input type="file" id="profile-photo-file" accept="image/*" style="display:none;" onchange="changeProfilePhoto(this)">
+        </div>
+        <div class="info">
+          <h3><span id="profile-name">—</span> <span id="profile-role-badge"></span></h3>
+          <div class="contact-line" id="profile-email">—</div>
+        </div>
+      </div>
+
+      <div class="verified-card" id="profile-verified-card" style="display:none;">
+        <div class="icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg></div>
+        <div class="txt"><strong id="profile-verified-title">Conta verificada</strong><span id="profile-verified-sub">—</span></div>
+      </div>
+
+      <div id="profile-stats-section"></div>
+
+      <div class="section-title"><h3>Atalhos</h3></div>
+      <div class="shortcut-grid" id="profile-shortcuts"></div>
+
+      <div id="profile-extra"></div>
+
+      <div class="section-title"><h3>Suporte</h3></div>
+      <div class="list-item" onclick="showScreen('help-center')">
+        <div class="icon" style="background:var(--info-tint);color:var(--info);">❓</div>
+        <div class="txt"><strong>Central de ajuda</strong><span>Dúvidas frequentes e contato</span></div>
+        <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+      </div>
+      <div class="list-item" onclick="openLegalScreen('terms','profile')">
+        <div class="icon" style="background:var(--paper);color:var(--ink-soft);">📄</div>
+        <div class="txt"><strong>Termos de uso</strong><span>Políticas e termos da plataforma</span></div>
+        <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+      </div>
+      <div class="list-item" onclick="openLegalScreen('privacy','profile')">
+        <div class="icon" style="background:var(--paper);color:var(--ink-soft);">🔒</div>
+        <div class="txt"><strong>Política de privacidade</strong><span>Como tratamos seus dados (LGPD)</span></div>
+        <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+      </div>
+
+      <button class="btn btn-ghost btn-block" style="margin-top:20px;" onclick="doLogout()">Sair da conta</button>
+      <div style="text-align:center;margin-top:28px;" id="delete-account-zone">
+        <a onclick="showDeleteAccountConfirm()" id="delete-account-link" style="font-size:11.5px;color:var(--ink-faint);cursor:pointer;text-decoration:underline;">Excluir minha conta</a>
+        <div id="delete-account-confirm" style="display:none;text-align:left;margin-top:14px;padding:14px;border:1px solid var(--danger,#e33);border-radius:10px;background:rgba(230,60,60,0.06);">
+          <p style="font-size:12.5px;color:var(--ink);line-height:1.5;margin:0 0 12px;">
+            Tem certeza que quer excluir sua conta? Seus dados pessoais (nome, e-mail, telefone, documento, endereço, fotos) serão apagados permanentemente. Essa ação não pode ser desfeita.
+          </p>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-ghost" style="flex:1;" onclick="hideDeleteAccountConfirm()">Cancelar</button>
+            <button class="btn" style="flex:1;background:var(--danger,#e33);color:#fff;" onclick="confirmDeleteAccount()" id="delete-account-confirm-btn">Sim, excluir conta</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="toolbox-nav" id="profile-nav"></div>
+  </section>
+
+  <!-- FAVORITOS -->
+  <section class="screen" data-screen="favorites">
+    <div class="back-row">
+      <button class="back-btn" onclick="showScreen('profile')">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <h2>Favoritos</h2>
+    </div>
+    <div class="screen-scroll" id="favorites-list"></div>
+  </section>
+
+  <!-- TODOS OS PROFISSIONAIS -->
+  <section class="screen" data-screen="all-providers">
+    <div class="back-row">
+      <button class="back-btn" onclick="showScreen('home')">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <h2>Profissionais</h2>
+    </div>
+    <div class="screen-scroll" id="all-providers-list"></div>
+  </section>
+
+  <!-- INDIQUE E GANHE -->
+  <section class="screen" data-screen="referral">
+    <div class="back-row">
+      <button class="back-btn" onclick="showScreen('profile')">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <h2>Indique e ganhe</h2>
+    </div>
+    <div class="screen-scroll">
+      <div class="hero-banner">
+        <h2>Indique amigos e <b>ganhe recompensas</b></h2>
+        <p>Compartilhe seu código. Quando quem você indicou fizer o primeiro pagamento na NEXSERV, você ganha 100 moedas.</p>
+      </div>
+      <div class="card" style="text-align:center;margin-bottom:16px;">
+        <div style="font-size:11px;color:var(--ink-soft);margin-bottom:6px;">Seu código de indicação</div>
+        <div style="font-size:22px;font-weight:800;color:var(--navy);letter-spacing:.05em;" id="referral-code">—</div>
+        <button class="btn btn-primary" style="margin-top:12px;" onclick="copyReferralCode()">Copiar código</button>
+      </div>
+      <div class="stat-grid">
+        <div class="stat-box"><div class="num" id="referral-count">0</div><div class="lab">Amigos indicados</div></div>
+        <div class="stat-box"><div class="num" id="referral-coins">0</div><div class="lab">Moedas ganhas</div></div>
+      </div>
+      <div class="card" style="margin-top:16px;display:none;" id="redeem-coins-card">
+        <div class="section-title" style="margin:0 0 6px;"><h3>Trocar moedas por desconto</h3></div>
+        <p style="font-size:12px;color:var(--ink-soft);margin:0 0 12px;">Troque de 100 em 100 moedas. Cada 100 moedas viram um cupom de R$ 10 de desconto — vale um cupom por compra.</p>
+        <div style="display:flex;gap:10px;align-items:flex-end;">
+          <div class="field" style="flex:1;margin:0;"><label>Moedas a trocar</label><input type="number" id="redeem-coins-input" min="100" step="100" value="100"></div>
+          <button class="btn btn-ghost btn-small" onclick="redeemCoinsForDiscount()">Trocar</button>
+        </div>
+        <div class="error-msg" id="redeem-coins-error"></div>
+        <div id="redeem-coins-result" style="display:none;margin-top:12px;padding:12px;border-radius:10px;background:var(--success-tint);text-align:center;">
+          <div style="font-size:12px;color:var(--ink-soft);">Cupom gerado</div>
+          <div style="font-size:18px;font-weight:800;color:var(--success);letter-spacing:.05em;" id="redeem-coins-code">—</div>
+        </div>
+      </div>
+      <p id="provider-coins-note" style="display:none;font-size:12px;color:var(--ink-soft);text-align:center;margin-top:16px;">Use suas moedas dentro do app: destaque suas propostas, seu perfil ou desbloqueie o contato de clientes na Carteira.</p>
+    </div>
+  </section>
+
+  <!-- CENTRAL DE AJUDA -->
+  <section class="screen" data-screen="help-center">
+    <div class="back-row">
+      <button class="back-btn" onclick="showScreen('profile')">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <h2>Central de ajuda</h2>
+    </div>
+    <div class="screen-scroll">
+      <div class="card" style="margin-bottom:14px;">
+        <strong style="font-size:14px;">Como funciona o pagamento?</strong>
+        <p style="font-size:12.5px;color:var(--ink-soft);margin:6px 0 0;line-height:1.5;">O valor combinado fica retido com segurança e só é repassado ao prestador depois que você aprova a conclusão do serviço.</p>
+      </div>
+      <div class="card" style="margin-bottom:14px;">
+        <strong style="font-size:14px;">Como recebo propostas?</strong>
+        <p style="font-size:12.5px;color:var(--ink-soft);margin:6px 0 0;line-height:1.5;">Após criar uma solicitação, prestadores da sua região enviam propostas com valor e disponibilidade para você escolher.</p>
+      </div>
+      <div class="card" style="margin-bottom:14px;">
+        <strong style="font-size:14px;">Como cancelo um pedido?</strong>
+        <p style="font-size:12.5px;color:var(--ink-soft);margin:6px 0 0;line-height:1.5;">Entre em contato pelo chat com o prestador ou fale com nosso suporte pelo e-mail abaixo.</p>
+      </div>
+      <div class="section-title"><h3>Fale conosco</h3></div>
+      <div class="list-item">
+        <div class="icon" style="background:var(--info-tint);color:var(--info);">✉️</div>
+        <div class="txt"><strong>suporte@nexserv.com.br</strong><span>Respondemos em até 24h úteis</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- TERMOS -->
+  <section class="screen" data-screen="terms">
+    <div class="back-row">
+      <button class="back-btn" onclick="closeLegalScreen()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <h2>Termos de uso</h2>
+    </div>
+    <div class="screen-scroll">
+      <p style="font-size:12px;color:var(--ink-faint);">Última atualização: julho de 2026</p>
+      <p style="font-size:13px;color:var(--ink-soft);line-height:1.6;">
+        O NEXSERV é uma plataforma de intermediação entre clientes que precisam de serviços e prestadores de serviço independentes.
+        Não somos empregadores dos prestadores nem prestamos os serviços diretamente — nossa função é conectar as partes, processar o pagamento
+        com segurança e dar suporte em caso de problemas.
+      </p>
+      <p style="font-size:13px;color:var(--ink-soft);line-height:1.6;">
+        <strong>Pagamentos:</strong> os valores pagos pelo cliente ficam retidos até a aprovação da conclusão do serviço, quando são então
+        repassados ao prestador, descontada a comissão da plataforma (e, em pagamentos no cartão à vista, a taxa de processamento e a taxa
+        de antecipação automática do recebimento, ambas cobradas pelo gateway de pagamento — detalhes em Perfil &gt; Parcelamento). Em
+        pagamentos parcelados, a taxa de antecipação é cobrada do cliente, embutida no valor total do cartão. O prazo de liberação depende
+        da aprovação do cliente.
+      </p>
+      <p style="font-size:13px;color:var(--ink-soft);line-height:1.6;">
+        <strong>Responsabilidade:</strong> o NEXSERV não se responsabiliza pela qualidade técnica dos serviços prestados por terceiros
+        independentes. Divergências entre cliente e prestador devem ser resolvidas entre as partes, com apoio do nosso suporte quando necessário.
+      </p>
+      <p style="font-size:13px;color:var(--ink-soft);line-height:1.6;">
+        <strong>Cadastro:</strong> você é responsável por manter suas informações de cadastro corretas e atualizadas, e por não compartilhar
+        sua senha com terceiros. Reservamo-nos o direito de suspender contas que violem estes termos ou usem a plataforma de forma fraudulenta.
+      </p>
+      <p style="font-size:13px;color:var(--ink-soft);line-height:1.6;">
+        Para informações sobre como tratamos seus dados pessoais, consulte nossa <a onclick="openLegalScreen('privacy', legalScreenOrigin)">Política de Privacidade</a>.
+      </p>
+    </div>
+  </section>
+
+  <!-- POLÍTICA DE PRIVACIDADE -->
+  <section class="screen" data-screen="privacy">
+    <div class="back-row">
+      <button class="back-btn" onclick="closeLegalScreen()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <h2>Política de privacidade</h2>
+    </div>
+    <div class="screen-scroll">
+      <p style="font-size:12px;color:var(--ink-faint);">Última atualização: julho de 2026</p>
+      <p style="font-size:13px;color:var(--ink-soft);line-height:1.6;">
+        Esta política explica como o NEXSERV coleta, usa e protege seus dados pessoais, em conformidade com a Lei Geral de Proteção de
+        Dados (Lei nº 13.709/2018 — LGPD).
+      </p>
+
+      <p style="font-size:13.5px;font-weight:700;color:var(--ink);margin:16px 0 4px;">Quais dados coletamos</p>
+      <p style="font-size:13px;color:var(--ink-soft);line-height:1.6;">
+        Nome, e-mail, telefone, CPF/CNPJ e endereço (cadastro); foto de perfil e, para prestadores, documento de identidade e selfie
+        (verificação de identidade); dados de pagamento processados diretamente pelo nosso gateway de pagamento (não armazenamos números
+        de cartão); histórico de pedidos, propostas, avaliações e mensagens trocadas na plataforma.
+      </p>
+
+      <p style="font-size:13.5px;font-weight:700;color:var(--ink);margin:16px 0 4px;">Por que coletamos e base legal</p>
+      <p style="font-size:13px;color:var(--ink-soft);line-height:1.6;">
+        Usamos seus dados para viabilizar a execução do contrato entre você e a plataforma (criar sua conta, conectar clientes e
+        prestadores, processar pagamentos), cumprir obrigações legais e regulatórias (ex: retenção de registros financeiros exigida por
+        lei), e, quando aplicável, com base no seu consentimento (ex: aceite dos Termos e desta Política no cadastro).
+      </p>
+
+      <p style="font-size:13.5px;font-weight:700;color:var(--ink);margin:16px 0 4px;">Com quem compartilhamos</p>
+      <p style="font-size:13px;color:var(--ink-soft);line-height:1.6;">
+        Compartilhamos dados apenas com parceiros necessários pra operar a plataforma: gateway de pagamento (processamento de cobranças e
+        repasses) e provedor de armazenamento em nuvem (fotos e documentos). Não vendemos seus dados a terceiros nem os usamos pra
+        publicidade fora da plataforma.
+      </p>
+
+      <p style="font-size:13.5px;font-weight:700;color:var(--ink);margin:16px 0 4px;">Por quanto tempo guardamos</p>
+      <p style="font-size:13px;color:var(--ink-soft);line-height:1.6;">
+        Mantemos seus dados enquanto sua conta estiver ativa. Registros de transações financeiras são mantidos pelo prazo exigido pela
+        legislação fiscal brasileira, mesmo após a exclusão da conta. Ao excluir sua conta, seus dados pessoais de identificação (nome,
+        e-mail, telefone, documento, endereço, fotos) são apagados/anonimizados; o histórico de pedidos e transações é mantido de forma
+        desvinculada da sua identidade, na medida exigida por lei.
+      </p>
+
+      <p style="font-size:13.5px;font-weight:700;color:var(--ink);margin:16px 0 4px;">Seus direitos</p>
+      <p style="font-size:13px;color:var(--ink-soft);line-height:1.6;">
+        Você pode, a qualquer momento: acessar e corrigir seus dados (tela de Perfil), solicitar uma cópia dos seus dados, ou excluir sua
+        conta (Perfil → Excluir minha conta). Para outras solicitações relacionadas aos seus dados, entre em contato com nosso encarregado
+        de dados no e-mail abaixo.
+      </p>
+
+      <p style="font-size:13.5px;font-weight:700;color:var(--ink);margin:16px 0 4px;">Encarregado de dados (DPO)</p>
+      <p style="font-size:13px;color:var(--ink-soft);line-height:1.6;">
+        Dúvidas ou solicitações sobre seus dados pessoais: <strong>nexservadmin@gmail.com</strong>
+      </p>
+    </div>
+  </section>
+
+</div>
+
+<script src="config.js"></script>
+<script src="app.js?v=20260804d"></script>
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => navigator.serviceWorker.register("sw.js"));
+}
+</script>
+</body>
+</html>

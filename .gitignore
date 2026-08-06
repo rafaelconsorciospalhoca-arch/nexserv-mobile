@@ -1,0 +1,12 @@
+node_modules/
+android/build/
+android/app/build/
+android/.gradle/
+android/local.properties
+android/*.log
+android/keystore.properties
+android/*.keystore
+android/KEYSTORE_SENHA_GUARDAR.txt
+ios/App/Pods/
+ios/App/build/
+*.log

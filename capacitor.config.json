@@ -1,0 +1,8 @@
+{
+  "appId": "br.com.digitiva.nexserv",
+  "appName": "NEXSERV",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https"
+  }
+}
