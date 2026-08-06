@@ -3236,6 +3236,7 @@ async function renderAllProvidersScreen() {
     <div class="p-card" onclick="viewProviderProfile('${p.id}','all-providers')">
       <div class="p-photo"><img src="${avatarSrc(p)}"></div>
       <div class="p-name">${firstNameLastInitial(p.name)}${p.is_founder ? ' 🏆' : ''}${p.is_subscriber ? ' ⭐' : ''}${p.featured ? '<span class="badge-featured">★</span>' : ''}</div>
+      <div class="p-role">${(p.categories || [])[0] || 'Prestador'}</div>
       <div class="p-rating">★ ${p.rating_avg ? parseFloat(p.rating_avg).toFixed(1) : '—'} (${p.rating_count || 0})</div>
     </div>
   `).join('')}</div>` : '<div class="empty-state"><span class="glyph">🔍</span><p>Nenhum profissional cadastrado ainda.</p></div>';

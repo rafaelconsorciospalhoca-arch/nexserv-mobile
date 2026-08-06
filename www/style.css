@@ -174,11 +174,12 @@ h1,h2,h3,h4{margin:0;font-weight:700;letter-spacing:-.01em;}
 .chip .chip-title{font-size:12px;font-weight:700;color:var(--ink);}
 .chip-badge{position:absolute;top:6px;right:6px;background:var(--success);color:#fff;font-size:8.5px;font-weight:800;padding:2px 5px;border-radius:6px;letter-spacing:.02em;}
 .provider-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
-.provider-grid .p-card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:8px;text-align:center;cursor:pointer;}
+.provider-grid .p-card{min-width:0;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:8px;text-align:center;cursor:pointer;}
 .provider-grid .p-card:hover{border-color:var(--primary);}
-.provider-grid .p-photo{width:100%;aspect-ratio:1;border-radius:12px;overflow:hidden;}
-.provider-grid .p-photo img{width:100%;height:100%;object-fit:cover;display:block;}
+.provider-grid .p-photo{position:relative;width:100%;height:0;padding-top:100%;border-radius:12px;overflow:hidden;background:var(--paper);}
+.provider-grid .p-photo img{position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;display:block;}
 .provider-grid .p-name{font-size:12px;font-weight:700;color:var(--ink);margin-top:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.provider-grid .p-role{font-size:10.5px;color:var(--ink-faint);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .provider-grid .p-rating{font-size:11px;color:var(--ink-soft);margin-top:2px;}
 .star-opt{cursor:pointer;color:var(--line);transition:color .15s;user-select:none;}
 .star-opt.selected{color:var(--warning);}
