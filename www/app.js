@@ -171,7 +171,7 @@ function avatarSrc(u) {
 }
 function avatarBoxHTML(name, photoUrl) {
   return photoUrl
-    ? `<img src="${imgProxy(photoUrl)}" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;">`
+    ? `<img src="${imgProxy(photoUrl)}" loading="lazy" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;">`
     : initials(name);
 }
 
@@ -203,7 +203,7 @@ const catFg = ['#D96A0F', '#3B82F6', '#16A34A', '#8B5CF6', '#D97706', '#DC2626']
 // (se tiver); sem foto, cai no emoji de sempre.
 function categoryChipHTML(c, i) {
   const icon = c.image_url
-    ? `<img src="${imgProxy(c.image_url)}" alt="">`
+    ? `<img src="${imgProxy(c.image_url)}" alt="" loading="lazy">`
     : categoryIcon[c.name] || '🛠️';
   return `
     <div class="chip ${c.hasProviders ? 'has-providers' : ''} ${c.image_url ? 'has-image' : ''}" onclick="openCategory('${c.name.replace(/'/g, "\\'")}')">
@@ -976,7 +976,7 @@ async function loadHomeCategories() {
 function bannerHTML(b) {
   return `
     <a class="ad-banner" href="${b.link_url}" target="_blank" rel="noopener">
-      <img src="${imgProxy(b.image_url)}" alt="${b.advertiser_name}">
+      <img src="${imgProxy(b.image_url)}" alt="${b.advertiser_name}" loading="lazy">
     </a>
   `;
 }
@@ -1049,7 +1049,7 @@ async function loadFeaturedProviders() {
   el.innerHTML = providers.length ? providers.map((p) => `
     <div class="pro-card" onclick="viewProviderProfile('${p.id}','home')">
       <div class="photo-wrap">
-        <img src="${avatarSrc(p)}">
+        <img src="${avatarSrc(p)}" loading="lazy">
         <div class="verified-dot"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 13l4 4L19 7"/></svg></div>
       </div>
       <div class="body">
@@ -1436,7 +1436,7 @@ async function viewProviderProfile(providerId, returnTo = 'proposals') {
   const rating = parseFloat(p.rating_avg) || 0;
   document.getElementById('provider-view-content').innerHTML = `
     <div class="profile-hero">
-      <img class="avatar-lg" src="${avatarSrc(p)}">
+      <img class="avatar-lg" src="${avatarSrc(p)}" loading="lazy">
       <div class="info">
         <h3>${p.name}${p.is_founder ? '<span class="badge-founder">🏆 Fundador</span>' : ''}${p.is_subscriber ? '<span class="badge-pro">⭐ PRO</span>' : ''}${p.featured ? '<span class="badge-featured">Destaque</span>' : ''}<span class="role-badge">${p.level || 'Bronze'}</span></h3>
         <div class="contact-line">${(p.categories || []).join(', ') || 'Prestador de serviços'}</div>
@@ -1451,7 +1451,7 @@ async function viewProviderProfile(providerId, returnTo = 'proposals') {
     ${p.bio ? `<div class="section-title"><h3>Sobre</h3></div><p style="font-size:13.5px;color:var(--ink-soft);">${p.bio}</p>` : ''}
     ${p.portfolio && p.portfolio.length ? `
       <div class="section-title"><h3>Trabalhos realizados</h3></div>
-      <div class="portfolio-grid">${p.portfolio.map((ph) => `<div class="portfolio-item"><img src="${imgProxy(ph.photo_url)}"></div>`).join('')}</div>
+      <div class="portfolio-grid">${p.portfolio.map((ph) => `<div class="portfolio-item"><img src="${imgProxy(ph.photo_url)}" loading="lazy"></div>`).join('')}</div>
     ` : ''}
     <div class="section-title"><h3>Avaliações</h3></div>
     ${p.reviews && p.reviews.length ? `
@@ -3000,7 +3000,7 @@ async function remindProviderSlow() {
 
 function messageBubbleHTML(m) {
   const mine = m.sender_id === user.id;
-  const attachment = m.attachment_url ? `<img src="${imgProxy(m.attachment_url)}">` : '';
+  const attachment = m.attachment_url ? `<img src="${imgProxy(m.attachment_url)}" loading="lazy">` : '';
   return `<div class="bubble ${mine ? 'me' : 'them'}">${esc(m.content)}${attachment}<div class="bubble-time">${timeFmt(m.created_at)}</div></div>`;
 }
 
@@ -3228,7 +3228,7 @@ async function renderFavoritesScreen() {
   document.getElementById('favorites-list').innerHTML = favs.length ? favs.map((p) => `
     <div class="req-card" onclick="viewProviderProfile('${p.id}','favorites')">
       <div class="ticket-row" style="align-items:center;">
-        <img class="avatar" src="${avatarSrc(p)}" style="border-radius:50%;">
+        <img class="avatar" src="${avatarSrc(p)}" style="border-radius:50%;" loading="lazy">
         <div class="ticket-info">
           <div class="name-row"><span class="name">${p.name}</span></div>
           <div class="stars">★ ${p.rating_avg ? parseFloat(p.rating_avg).toFixed(1) : '—'} · ${(p.categories || [])[0] || ''}</div>
@@ -3245,7 +3245,7 @@ async function renderAllProvidersScreen() {
   const providers = await api('/providers/directory/list');
   el.innerHTML = providers.length ? `<div class="provider-grid">${providers.map((p) => `
     <div class="p-card" onclick="viewProviderProfile('${p.id}','all-providers')">
-      <div class="p-photo"><img src="${avatarSrc(p)}"></div>
+      <div class="p-photo"><img src="${avatarSrc(p)}" loading="lazy"></div>
       <div class="p-name">${firstNameLastInitial(p.name)}${p.is_founder ? ' 🏆' : ''}${p.is_subscriber ? ' ⭐' : ''}${p.featured ? '<span class="badge-featured">★</span>' : ''}</div>
       <div class="p-role">${(p.categories || [])[0] || 'Prestador'}</div>
       <div class="p-rating">★ ${p.rating_avg ? parseFloat(p.rating_avg).toFixed(1) : '—'} (${p.rating_count || 0})</div>
@@ -3296,7 +3296,7 @@ async function saveProviderBio() {
 function renderPortfolioGrid(photos) {
   document.getElementById('portfolio-grid').innerHTML = photos.map((p) => `
     <div class="portfolio-item">
-      <img src="${imgProxy(p.photo_url)}">
+      <img src="${imgProxy(p.photo_url)}" loading="lazy">
       <button class="remove-btn" onclick="deletePortfolioPhoto('${p.id}')">&times;</button>
     </div>
   `).join('');
