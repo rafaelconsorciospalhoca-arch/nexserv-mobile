@@ -642,6 +642,18 @@
         </div>
       </div>
 
+      <div class="field">
+        <label>Certidão de antecedentes criminais (opcional, ganha selo extra no perfil)</label>
+        <p style="font-size:11.5px;color:var(--ink-soft);margin:-2px 0 6px;">
+          Não é obrigatório — mas quem envia e é aprovado ganha um selo de confiança extra, visível pros clientes.
+          Tire a sua gratuitamente em <a href="https://www.gov.br/pt-br/servicos/emitir-certidao-de-antecedentes-criminais" target="_blank" rel="noopener">gov.br/antecedentes-criminais</a> (certidão federal, válida em todo o Brasil).
+        </p>
+        <div class="upload-box" id="verif-criminalRecord-box">
+          Toque para adicionar a certidão (PDF ou foto)
+          <input type="file" id="verif-criminalRecord" accept="image/*,.pdf,application/pdf" onchange="previewVerificationFile('criminalRecord')">
+        </div>
+      </div>
+
       <button class="btn btn-primary btn-block" id="verif-submit-btn" onclick="submitVerification()">Enviar verificação</button>
       <div class="error-msg" id="verif-error"></div>
     </div>
@@ -1443,8 +1455,10 @@
       <p style="font-size:13.5px;font-weight:700;color:var(--ink);margin:16px 0 4px;">Quais dados coletamos</p>
       <p style="font-size:13px;color:var(--ink-soft);line-height:1.6;">
         Nome, e-mail, telefone, CPF/CNPJ e endereço (cadastro); foto de perfil e, para prestadores, documento de identidade e selfie
-        (verificação de identidade); dados de pagamento processados diretamente pelo nosso gateway de pagamento (não armazenamos números
-        de cartão); histórico de pedidos, propostas, avaliações e mensagens trocadas na plataforma.
+        (verificação de identidade); certidão de antecedentes criminais, apenas se o prestador optar por enviá-la voluntariamente para obter
+        o selo de confiança extra (dado sensível, tratado com o mesmo sigilo dos demais documentos de verificação — nunca fica público, só o
+        resultado da análise, aprovado ou não, aparece no perfil); dados de pagamento processados diretamente pelo nosso gateway de pagamento
+        (não armazenamos números de cartão); histórico de pedidos, propostas, avaliações e mensagens trocadas na plataforma.
       </p>
 
       <p style="font-size:13.5px;font-weight:700;color:var(--ink);margin:16px 0 4px;">Por que coletamos e base legal</p>
@@ -1486,7 +1500,7 @@
 </div>
 
 <script src="config.js"></script>
-<script src="app.js?v=20260806f"></script>
+<script src="app.js?v=20260807a"></script>
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => navigator.serviceWorker.register('sw.js'));

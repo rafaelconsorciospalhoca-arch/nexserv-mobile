@@ -1438,7 +1438,7 @@ async function viewProviderProfile(providerId, returnTo = 'proposals') {
     <div class="profile-hero">
       <img class="avatar-lg" src="${avatarSrc(p)}" loading="lazy">
       <div class="info">
-        <h3>${p.name}${p.is_founder ? '<span class="badge-founder">🏆 Fundador</span>' : ''}${p.is_subscriber ? '<span class="badge-pro">⭐ PRO</span>' : ''}${p.featured ? '<span class="badge-featured">Destaque</span>' : ''}<span class="role-badge">${p.level || 'Bronze'}</span></h3>
+        <h3>${p.name}${p.is_founder ? '<span class="badge-founder">🏆 Fundador</span>' : ''}${p.is_subscriber ? '<span class="badge-pro">⭐ PRO</span>' : ''}${p.criminal_record_status === 'approved' ? '<span class="badge-founder" title="Certidão de antecedentes criminais verificada">🛡️ Antecedentes verificados</span>' : ''}${p.featured ? '<span class="badge-featured">Destaque</span>' : ''}<span class="role-badge">${p.level || 'Bronze'}</span></h3>
         <div class="contact-line">${(p.categories || []).join(', ') || 'Prestador de serviços'}</div>
       </div>
     </div>
@@ -2053,6 +2053,7 @@ async function submitVerification() {
   let documentFile = document.getElementById('verif-document').files[0];
   let selfieFile = document.getElementById('verif-selfie').files[0];
   let diplomaFile = document.getElementById('verif-diploma').files[0];
+  let criminalRecordFile = document.getElementById('verif-criminalRecord').files[0];
 
   const existing = await api('/provider/verification');
   if (!documentFile && !existing.documentPhotoUrl) { errorEl.textContent = 'Envie a foto do documento.'; return; }
@@ -2062,14 +2063,15 @@ async function submitVerification() {
   const originalBtnText = btn.textContent;
   btn.textContent = 'Enviando...';
   try {
-    [documentFile, selfieFile, diplomaFile] = await Promise.all([
-      compressImage(documentFile), compressImage(selfieFile), compressImage(diplomaFile),
+    [documentFile, selfieFile, diplomaFile, criminalRecordFile] = await Promise.all([
+      compressImage(documentFile), compressImage(selfieFile), compressImage(diplomaFile), compressImage(criminalRecordFile),
     ]);
 
     const fd = new FormData();
     if (documentFile) fd.append('document', documentFile);
     if (selfieFile) fd.append('selfie', selfieFile);
     if (diplomaFile) fd.append('diploma', diplomaFile);
+    if (criminalRecordFile) fd.append('criminalRecord', criminalRecordFile);
 
     await api('/provider/verification', { method: 'POST', body: fd });
     if (selfieFile) {
