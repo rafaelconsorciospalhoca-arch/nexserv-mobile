@@ -444,13 +444,13 @@ async function openHowItWorks(origin) {
       const res = await fetch(`${API_BASE}/provider-promo`);
       providerPromoCache = await res.json();
     }
-    const { standardRate, promoRate, promoCap, promoDurationMonths, slotsRemaining } = providerPromoCache;
+    const { standardRate, promoCap, promoDurationMonths, slotsRemaining } = providerPromoCache;
     const promoActive = slotsRemaining > 0;
     el.innerHTML = `
       <strong style="font-size:14px;">💰 Como funciona por aqui</strong>
       <ul style="margin:10px 0 0;padding-left:18px;font-size:13px;color:var(--ink-soft);line-height:1.8;">
-        <li>Comissão da plataforma: <strong style="color:var(--ink);">${standardRate}%</strong> sobre cada serviço pago pelo cliente.${promoActive ? ` Como você é um dos <strong style="color:var(--primary-dark);">${promoCap} primeiros prestadores</strong>, sua taxa fica em <strong style="color:var(--primary-dark);">${promoRate}% durante ${promoDurationMonths} meses</strong> — depois volta pra taxa padrão.` : ''}</li>
-        ${promoActive ? `<li>🏆 Benefício de fundador: <strong style="color:var(--ink);">selo permanente</strong> no seu perfil, <strong style="color:var(--ink);">200 moedas</strong> de bônus e <strong style="color:var(--ink);">destaque de perfil grátis por ${promoDurationMonths} meses</strong> (aparece em rodízio na home, dando vez pra todos os fundadores).</li>` : ''}
+        <li>Comissão da plataforma: <strong style="color:var(--ink);">${standardRate}%</strong> sobre cada serviço pago pelo cliente.</li>
+        ${promoActive ? `<li>🏆 Benefício de fundador: como você é um dos <strong style="color:var(--primary-dark);">${promoCap} primeiros prestadores</strong>, ganha <strong style="color:var(--ink);">selo permanente</strong> no seu perfil, <strong style="color:var(--ink);">200 moedas</strong> de bônus e <strong style="color:var(--ink);">destaque de perfil grátis por ${promoDurationMonths} meses</strong> (aparece em rodízio na home, dando vez pra todos os fundadores).</li>` : ''}
         <li>100 moedas pra destacar uma proposta específica — sobe ela no topo pro cliente daquele pedido.</li>
         <li>300 moedas pra desbloquear o contato de cada cliente (só depois que ele pagar).</li>
         <li>700 moedas pra destacar seu perfil por 30 dias — aparece primeiro pros clientes e ganha o selo "Destaque" nas propostas.</li>
