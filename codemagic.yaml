@@ -25,10 +25,21 @@ workflows:
       app_store_connect: nexserv_appstore
     environment:
       node: 20
+      vars:
+        BUNDLE_ID: "br.com.digitiva.nexserv"
       ios_signing:
         distribution_type: app_store
         bundle_identifier: br.com.digitiva.nexserv
     scripts:
+      - name: Preparar keychain
+        script: keychain initialize
+      - name: Buscar (ou criar) certificado e perfil de assinatura na Apple
+        script: |
+          app-store-connect fetch-signing-files "$BUNDLE_ID" \
+            --type IOS_APP_STORE \
+            --create
+      - name: Adicionar certificado ao keychain
+        script: keychain add-certificates
       - name: Instalar dependências
         script: npm ci
       - name: Sincronizar Capacitor
@@ -36,7 +47,7 @@ workflows:
       - name: Instalar CocoaPods
         script: |
           cd ios/App && pod install
-      - name: Configurar assinatura de código
+      - name: Configurar assinatura de código no projeto Xcode
         script: xcode-project use-profiles
       - name: Build do .ipa
         script: |
