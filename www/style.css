@@ -49,7 +49,7 @@ h1,h2,h3,h4{margin:0;font-weight:700;letter-spacing:-.01em;}
 /* ---------- topbar ---------- */
 .topbar{
   display:flex;align-items:center;justify-content:space-between;
-  padding:16px 20px;background:var(--card);border-bottom:1px solid var(--line);
+  padding:calc(16px + env(safe-area-inset-top)) 20px 16px;background:var(--card);border-bottom:1px solid var(--line);
   position:sticky;top:0;z-index:20;
 }
 .topbar .brand{display:flex;align-items:center;}
@@ -73,7 +73,7 @@ h1,h2,h3,h4{margin:0;font-weight:700;letter-spacing:-.01em;}
 .screen-scroll::-webkit-scrollbar{width:0;}
 .page-title{font-size:22px;font-weight:800;margin:4px 0 16px;color:var(--navy);}
 
-.back-row{display:flex;align-items:center;gap:10px;padding:14px 20px 0;}
+.back-row{display:flex;align-items:center;gap:10px;padding:calc(14px + env(safe-area-inset-top)) 20px 0;}
 .back-btn{
   width:34px;height:34px;border-radius:9px;border:1px solid var(--line);background:var(--card);
   display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--ink);flex:0 0 auto;
