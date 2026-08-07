@@ -38,7 +38,7 @@ workflows:
       - name: Numerar o build (obrigatório ser maior que o anterior na Apple)
         script: |
           cd ios/App
-          agvtool new-version -all $CM_BUILD_NUMBER
+          agvtool new-version -all $(date +%s)
       - name: Build do .ipa
         script: |
           xcode-project build-ipa --project ios/App/App.xcodeproj --scheme App
