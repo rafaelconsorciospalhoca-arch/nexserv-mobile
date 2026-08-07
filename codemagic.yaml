@@ -27,9 +27,6 @@ workflows:
       node: 20
       vars:
         BUNDLE_ID: "br.com.digitiva.nexserv"
-      ios_signing:
-        distribution_type: app_store
-        bundle_identifier: br.com.digitiva.nexserv
     scripts:
       - name: Preparar keychain
         script: keychain initialize
