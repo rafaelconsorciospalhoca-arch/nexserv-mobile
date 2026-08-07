@@ -24,7 +24,7 @@ workflows:
     integrations:
       app_store_connect: nexserv_appstore
     environment:
-      node: 20
+      node: 22
       ios_signing:
         distribution_type: app_store
         bundle_identifier: br.com.digitiva.nexserv
