@@ -585,6 +585,56 @@ async function loadProviderCategoriesScreen() {
   renderProviderServiceCityChips();
   loadProviderCatalogSections();
   loadProviderTravelFee();
+  loadProviderKmRateSections();
+}
+
+// ---------- Preço por km do prestador (mobilidade) ----------
+async function loadProviderKmRateSections() {
+  const wrap = document.getElementById('provider-km-rate-wrap');
+  const myCategories = KM_RATE_CATEGORIES.filter((c) => selectedProviderCategories.has(c));
+  if (myCategories.length === 0) { wrap.innerHTML = ''; return; }
+
+  const rates = await Promise.all(myCategories.map((cat) => api(`/provider/km-rate/mine?category=${encodeURIComponent(cat)}`)));
+
+  wrap.innerHTML = `
+    <div class="section-title" style="margin-top:24px;"><h3>Preço por km (mobilidade)</h3></div>
+    <p style="font-size:12.5px;color:var(--ink-soft);margin-top:0;">O cliente escolhe cidade de origem e destino, o valor sai calculado automático (taxa fixa + km rodado).</p>
+    ${myCategories.map((cat, i) => {
+      const rate = rates[i];
+      return `
+      <div style="border:1.5px solid var(--line);border-radius:11px;padding:12px;margin-bottom:10px;">
+        <strong style="font-size:13.5px;">${cat}</strong>
+        <div style="display:flex;gap:8px;margin-top:8px;">
+          <div class="field" style="flex:1;margin-bottom:0;"><label>R$ por km</label><input id="km-rate-perkm-${cssId(cat)}" oninput="formatMoneyInput(this)" value="${rate ? Number(rate.price_per_km).toFixed(2).replace('.', ',') : ''}" placeholder="0,00"></div>
+          <div class="field" style="flex:1;margin-bottom:0;"><label>Taxa fixa (opcional)</label><input id="km-rate-base-${cssId(cat)}" oninput="formatMoneyInput(this)" value="${rate && rate.base_fee > 0 ? Number(rate.base_fee).toFixed(2).replace('.', ',') : ''}" placeholder="0,00"></div>
+        </div>
+        <button class="btn btn-ghost btn-block btn-small" style="margin-top:8px;" onclick="saveProviderKmRate('${cat.replace(/'/g, "\\'")}')">Salvar</button>
+        <div class="error-msg" id="km-rate-error-${cssId(cat)}"></div>
+      </div>
+    `;
+    }).join('')}
+  `;
+}
+
+async function saveProviderKmRate(category) {
+  const errorEl = document.getElementById(`km-rate-error-${cssId(category)}`);
+  errorEl.textContent = '';
+  const pricePerKm = parseMoneyInput(document.getElementById(`km-rate-perkm-${cssId(category)}`).value);
+  const baseFeeRaw = document.getElementById(`km-rate-base-${cssId(category)}`).value;
+  const baseFee = baseFeeRaw ? parseMoneyInput(baseFeeRaw) : 0;
+  if (!pricePerKm || isNaN(pricePerKm) || pricePerKm <= 0) {
+    errorEl.style.color = 'var(--danger)';
+    errorEl.textContent = 'Preencha o valor por km.';
+    return;
+  }
+  try {
+    await api('/provider/km-rate', { method: 'PUT', body: { category, pricePerKm, baseFee } });
+    errorEl.style.color = 'var(--success)';
+    errorEl.textContent = 'Salvo.';
+  } catch (err) {
+    errorEl.style.color = 'var(--danger)';
+    errorEl.textContent = err.message;
+  }
 }
 
 async function loadProviderTravelFee() {
@@ -686,6 +736,9 @@ async function saveProviderCategories() {
 // Só liberado nessas categorias por enquanto (lançamento em etapas, como o
 // próprio sistema de categorias com cobertura fez antes).
 const FIXED_PRICE_CATEGORIES = ['Eletricista', 'Diarista/Limpeza', 'Hidráulica', 'Montagem de Móveis', 'Marido de Aluguel', 'Babá & Cuidadores', 'Cuidados a Idosos'];
+// Categorias de mobilidade — preço calculado por km (origem/destino), não por
+// item. Fluxo separado do catálogo de itens, ver loadProviderKmRateSections.
+const KM_RATE_CATEGORIES = ['Motoboy', 'Motorista de App', 'Fretes & Transporte', 'Fretes e Mudanças', 'Guincho & Reboque', 'Mudanças'];
 let providerCatalogState = {};
 
 async function loadProviderCatalogSections() {
@@ -1621,11 +1674,14 @@ async function viewProviderProfile(providerId, returnTo = 'proposals') {
   providerViewReturnScreen = returnTo;
   document.getElementById('provider-view-content').innerHTML = '<div class="empty-state" style="padding:40px 20px;"><p>Carregando perfil...</p></div>';
   showScreen('provider-view');
-  const [p, isFavorited, catalogItems] = await Promise.all([
+  const [p, isFavorited, catalogItems, kmRates, cities] = await Promise.all([
     api(`/providers/${providerId}`),
     token && user.role === 'client' ? checkFavorited(providerId) : Promise.resolve(false),
     api(`/providers/${providerId}/catalog`).catch(() => []),
+    api(`/providers/${providerId}/km-rates`).catch(() => []),
+    availableCitiesCache.length ? Promise.resolve(availableCitiesCache) : api('/cities/active').catch(() => []),
   ]);
+  availableCitiesCache = cities;
   const rating = parseFloat(p.rating_avg) || 0;
   providerCatalogViewState = {};
   providerCatalogItemsById = {};
@@ -1674,6 +1730,18 @@ async function viewProviderProfile(providerId, returnTo = 'proposals') {
       </div>
       <button class="btn btn-primary btn-block" onclick="checkoutProviderCatalog('${providerId}','${cat.replace(/'/g, "\\'")}','${p.name.replace(/'/g, "\\'")}')">Contratar agora</button>
     `).join('') : ''}
+    ${kmRates.length ? kmRates.map((r) => `
+      <div class="section-title" style="margin-top:16px;"><h3>Contratar agora — ${r.category}</h3></div>
+      <p style="font-size:12.5px;color:var(--ink-soft);margin-top:0;">Escolha origem e destino — o valor é calculado na hora (R$ ${Number(r.price_per_km).toFixed(2).replace('.', ',')}/km${parseFloat(r.base_fee) > 0 ? ` + R$ ${Number(r.base_fee).toFixed(2).replace('.', ',')} de taxa fixa` : ''}).</p>
+      <div class="field"><label>Cidade de origem</label>
+        <select id="km-origin-${cssId(r.category)}">${availableCitiesCache.map((c) => `<option value="${c.city}|${c.state}">${c.city}/${c.state}</option>`).join('')}</select>
+      </div>
+      <div class="field"><label>Cidade de destino</label>
+        <select id="km-dest-${cssId(r.category)}">${availableCitiesCache.map((c) => `<option value="${c.city}|${c.state}">${c.city}/${c.state}</option>`).join('')}</select>
+      </div>
+      <button class="btn btn-ghost btn-block btn-small" onclick="quoteKmRate('${providerId}','${r.category.replace(/'/g, "\\'")}','${p.name.replace(/'/g, "\\'")}')">Ver preço</button>
+      <div id="km-quote-result-${cssId(r.category)}" style="margin-top:8px;"></div>
+    `).join('') : ''}
     ${p.bio ? `<div class="section-title"><h3>Sobre</h3></div><p style="font-size:13.5px;color:var(--ink-soft);">${p.bio}</p>` : ''}
     ${p.portfolio && p.portfolio.length ? `
       <div class="section-title"><h3>Trabalhos realizados</h3></div>
@@ -1716,6 +1784,41 @@ async function checkoutProviderCatalog(providerId, category, providerName) {
   if (items.length === 0) { alert('Escolha a quantidade de pelo menos um item.'); return; }
   try {
     const created = await api(`/providers/${providerId}/catalog/checkout`, { method: 'POST', body: { category, items } });
+    goToPaymentScreen(created, providerName);
+  } catch (err) {
+    alert(err.message);
+  }
+}
+
+async function quoteKmRate(providerId, category, providerName) {
+  const resultEl = document.getElementById(`km-quote-result-${cssId(category)}`);
+  resultEl.innerHTML = '<p style="font-size:12.5px;color:var(--ink-soft);">Calculando...</p>';
+  const [originCity, originState] = document.getElementById(`km-origin-${cssId(category)}`).value.split('|');
+  const [destCity, destState] = document.getElementById(`km-dest-${cssId(category)}`).value.split('|');
+  try {
+    const quote = await api(`/providers/${providerId}/km-rate/quote`, {
+      method: 'POST', body: { category, originCity, originState, destCity, destState },
+    });
+    resultEl.innerHTML = `
+      <p style="font-size:12.5px;color:var(--ink-soft);margin:0 0 6px;">${quote.distanceKm} km — total estimado</p>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <span style="font-size:12.5px;color:var(--ink-soft);">Total</span>
+        <span style="font-size:16px;font-weight:700;">${money(quote.price)}</span>
+      </div>
+      <button class="btn btn-primary btn-block" onclick="checkoutKmRate('${providerId}','${category.replace(/'/g, "\\'")}','${providerName.replace(/'/g, "\\'")}')">Contratar agora</button>
+    `;
+  } catch (err) {
+    resultEl.innerHTML = `<p style="font-size:12.5px;color:var(--danger);">${err.message}</p>`;
+  }
+}
+
+async function checkoutKmRate(providerId, category, providerName) {
+  const [originCity, originState] = document.getElementById(`km-origin-${cssId(category)}`).value.split('|');
+  const [destCity, destState] = document.getElementById(`km-dest-${cssId(category)}`).value.split('|');
+  try {
+    const created = await api(`/providers/${providerId}/km-rate/checkout`, {
+      method: 'POST', body: { category, originCity, originState, destCity, destState },
+    });
     goToPaymentScreen(created, providerName);
   } catch (err) {
     alert(err.message);

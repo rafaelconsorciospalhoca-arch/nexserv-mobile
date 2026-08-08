@@ -798,6 +798,8 @@
       </div>
       <button class="btn btn-ghost btn-block btn-small" style="margin-top:10px;" onclick="saveProviderTravelFee()">Salvar taxa de deslocamento</button>
       <div class="error-msg" id="provider-travel-fee-error"></div>
+
+      <div id="provider-km-rate-wrap"></div>
     </div>
   </section>
 
@@ -1511,7 +1513,7 @@
 </div>
 
 <script src="config.js"></script>
-<script src="app.js?v=20260808b"></script>
+<script src="app.js?v=20260808c"></script>
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => navigator.serviceWorker.register('sw.js'));
