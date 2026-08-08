@@ -685,7 +685,7 @@ async function saveProviderCategories() {
 // ---------- Catálogo de preço fixo do prestador ----------
 // Só liberado nessas categorias por enquanto (lançamento em etapas, como o
 // próprio sistema de categorias com cobertura fez antes).
-const FIXED_PRICE_CATEGORIES = ['Eletricista', 'Diarista/Limpeza'];
+const FIXED_PRICE_CATEGORIES = ['Eletricista', 'Diarista/Limpeza', 'Hidráulica', 'Montagem de Móveis', 'Marido de Aluguel', 'Babá & Cuidadores', 'Cuidados a Idosos'];
 let providerCatalogState = {};
 
 async function loadProviderCatalogSections() {
