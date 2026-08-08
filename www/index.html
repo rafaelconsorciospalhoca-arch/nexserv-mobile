@@ -9,7 +9,7 @@
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#22C55E">
 <link rel="apple-touch-icon" href="icon-192.png">
-<link rel="stylesheet" href="style.css?v=20260807b">
+<link rel="stylesheet" href="style.css?v=20260808a">
 </head>
 <body>
 
@@ -430,7 +430,7 @@
 
       <div class="section-title"><h3>Cupom de desconto</h3></div>
       <div style="display:flex;gap:8px;margin-bottom:6px;">
-        <input id="coupon-input" placeholder="Código do cupom" style="flex:1;border:1.5px solid var(--line);background:var(--card);border-radius:11px;padding:12px 14px;font-family:inherit;font-size:14.5px;text-transform:uppercase;">
+        <input id="coupon-input" placeholder="Código do cupom" style="flex:1;border:1.5px solid var(--line);background:var(--card);border-radius:11px;padding:12px 14px;font-family:inherit;font-size:16px;text-transform:uppercase;">
         <button class="btn btn-ghost" onclick="applyCoupon()">Aplicar</button>
       </div>
       <div class="error-msg" id="coupon-error" style="margin-top:0;margin-bottom:14px;"></div>
@@ -787,6 +787,8 @@
       <div class="chip-select" id="provider-category-chips"></div>
       <button class="btn btn-primary btn-block" style="margin-top:20px;" onclick="saveProviderCategories()">Salvar categorias</button>
       <div class="error-msg" id="provider-categories-error"></div>
+
+      <div id="provider-catalog-wrap"></div>
     </div>
   </section>
 
@@ -1500,7 +1502,7 @@
 </div>
 
 <script src="config.js"></script>
-<script src="app.js?v=20260807d"></script>
+<script src="app.js?v=20260808a"></script>
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => navigator.serviceWorker.register('sw.js'));

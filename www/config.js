@@ -1,2 +1,2 @@
-// Versão web: roda no mesmo domínio do backend, então não precisa de URL absoluta.
+// App nativo (Capacitor): roda dentro do WebView, então precisa da URL absoluta do backend.
 window.CHAMA_CONFIG = { apiBase: 'https://www.nexserv.com.br' };

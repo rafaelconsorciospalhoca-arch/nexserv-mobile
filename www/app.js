@@ -583,6 +583,7 @@ async function loadProviderCategoriesScreen() {
   selectedProviderServiceCities = new Set(myServiceCities.map((c) => `${c.city}|${c.state}`));
   renderProviderCategoryChips(categories);
   renderProviderServiceCityChips();
+  loadProviderCatalogSections();
 }
 
 function renderProviderServiceCityChips() {
@@ -655,6 +656,107 @@ async function saveProviderCategories() {
     await api('/provider/categories', { method: 'PUT', body: { categories: Array.from(selectedProviderCategories) } });
     setTab('profile');
   } catch (err) {
+    errorEl.textContent = err.message;
+  }
+}
+
+// ---------- Catálogo de preço fixo do prestador ----------
+// Só liberado nessas categorias por enquanto (lançamento em etapas, como o
+// próprio sistema de categorias com cobertura fez antes).
+const FIXED_PRICE_CATEGORIES = ['Eletricista', 'Diarista/Limpeza'];
+let providerCatalogState = {};
+
+async function loadProviderCatalogSections() {
+  const wrap = document.getElementById('provider-catalog-wrap');
+  const myCategories = FIXED_PRICE_CATEGORIES.filter((c) => selectedProviderCategories.has(c));
+  if (myCategories.length === 0) { wrap.innerHTML = ''; return; }
+
+  wrap.innerHTML = myCategories.map((cat) => `
+    <div class="section-title" style="margin-top:24px;"><h3>Catálogo de preço fixo — ${cat}</h3></div>
+    <p style="font-size:12.5px;color:var(--ink-soft);margin-top:0;">Preencha o preço dos itens que quer oferecer com contratação direta. Deixe em branco o que não quiser oferecer.</p>
+    <div id="provider-catalog-list-${cssId(cat)}"></div>
+    <div class="chip-opt" style="display:inline-flex;align-items:center;gap:4px;margin-top:8px;" onclick="addProviderCatalogCustomRow('${cat.replace(/'/g, "\\'")}')">+ Adicionar serviço próprio</div>
+    <button class="btn btn-ghost btn-block btn-small" style="margin-top:10px;" onclick="saveProviderCatalog('${cat.replace(/'/g, "\\'")}')">Salvar catálogo — ${cat}</button>
+    <div class="error-msg" id="provider-catalog-error-${cssId(cat)}"></div>
+  `).join('');
+
+  await Promise.all(myCategories.map((cat) => loadProviderCatalogCategory(cat)));
+}
+
+function cssId(str) { return str.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-zA-Z0-9]/g, ''); }
+
+async function loadProviderCatalogCategory(category) {
+  const [templates, mine] = await Promise.all([
+    api(`/provider/catalog/templates?category=${encodeURIComponent(category)}`),
+    api(`/provider/catalog/mine?category=${encodeURIComponent(category)}`),
+  ]);
+  const rows = templates.map((t) => {
+    const mineItem = mine.find((m) => normalize(m.name) === normalize(t.name));
+    return { id: mineItem?.id || null, name: t.name, unit: t.unit, price: mineItem?.price ?? null, isCustom: false };
+  });
+  mine.filter((m) => !templates.some((t) => normalize(t.name) === normalize(m.name)))
+    .forEach((m) => rows.push({ id: m.id, name: m.name, unit: m.unit, price: m.price, isCustom: true }));
+  providerCatalogState[category] = rows;
+  renderProviderCatalogRows(category);
+}
+
+function renderProviderCatalogRows(category) {
+  const list = document.getElementById(`provider-catalog-list-${cssId(category)}`);
+  if (!list) return;
+  list.innerHTML = providerCatalogState[category].map((row, i) => `
+    <div style="display:flex;align-items:center;gap:8px;border:1.5px solid var(--line);border-radius:11px;padding:8px 10px;margin-bottom:8px;">
+      <span style="flex:1;font-size:13px;">${row.name}${row.isCustom ? ` <span style="color:var(--ink-faint);font-size:11px;">(próprio)</span>` : ''}</span>
+      <span style="font-size:12px;color:var(--ink-soft);">${row.unit}</span>
+      <span style="font-size:12.5px;color:var(--ink-soft);">R$</span>
+      <input data-cat="${category.replace(/"/g, '&quot;')}" data-idx="${i}" value="${row.price != null ? Number(row.price).toFixed(2).replace('.', ',') : ''}"
+        oninput="formatMoneyInput(this)" style="width:80px;text-align:right;font-size:16px;">
+      ${row.isCustom ? `<span style="cursor:pointer;color:var(--danger);font-size:15px;" onclick="removeProviderCatalogRow('${category.replace(/'/g, "\\'")}', ${i})">✕</span>` : ''}
+    </div>
+  `).join('') || '<p style="font-size:12.5px;color:var(--ink-faint);">Nenhum item ainda.</p>';
+}
+
+function addProviderCatalogCustomRow(category) {
+  const name = prompt('Nome do serviço:');
+  if (!name || !name.trim()) return;
+  const unit = prompt('Unidade (ex: unidade, hora, diária):', 'unidade') || 'unidade';
+  providerCatalogState[category].push({ id: null, name: name.trim(), unit: unit.trim(), price: null, isCustom: true });
+  renderProviderCatalogRows(category);
+}
+
+async function removeProviderCatalogRow(category, idx) {
+  const row = providerCatalogState[category][idx];
+  if (row.id) {
+    try { await api(`/provider/catalog/${row.id}`, { method: 'DELETE' }); } catch (err) { alert(err.message); return; }
+  }
+  providerCatalogState[category].splice(idx, 1);
+  renderProviderCatalogRows(category);
+}
+
+async function saveProviderCatalog(category) {
+  const errorEl = document.getElementById(`provider-catalog-error-${cssId(category)}`);
+  errorEl.textContent = '';
+  const inputs = document.querySelectorAll(`#provider-catalog-list-${cssId(category)} input[data-cat]`);
+  try {
+    for (const input of inputs) {
+      const idx = parseInt(input.dataset.idx, 10);
+      const row = providerCatalogState[category][idx];
+      const price = parseMoneyInput(input.value);
+      if (!input.value || isNaN(price) || price <= 0) {
+        if (row.id) { await api(`/provider/catalog/${row.id}`, { method: 'DELETE' }); row.id = null; }
+        continue;
+      }
+      if (row.id) {
+        await api(`/provider/catalog/${row.id}`, { method: 'PATCH', body: { price } });
+      } else {
+        const created = await api('/provider/catalog', { method: 'POST', body: { category, name: row.name, unit: row.unit, price } });
+        row.id = created.id;
+      }
+      row.price = price;
+    }
+    errorEl.style.color = 'var(--success)';
+    errorEl.textContent = 'Catálogo salvo.';
+  } catch (err) {
+    errorEl.style.color = 'var(--danger)';
     errorEl.textContent = err.message;
   }
 }
@@ -1497,11 +1599,17 @@ async function viewProviderProfile(providerId, returnTo = 'proposals') {
   providerViewReturnScreen = returnTo;
   document.getElementById('provider-view-content').innerHTML = '<div class="empty-state" style="padding:40px 20px;"><p>Carregando perfil...</p></div>';
   showScreen('provider-view');
-  const [p, isFavorited] = await Promise.all([
+  const [p, isFavorited, catalogItems] = await Promise.all([
     api(`/providers/${providerId}`),
     token && user.role === 'client' ? checkFavorited(providerId) : Promise.resolve(false),
+    api(`/providers/${providerId}/catalog`).catch(() => []),
   ]);
   const rating = parseFloat(p.rating_avg) || 0;
+  providerCatalogViewState = {};
+  providerCatalogItemsById = {};
+  catalogItems.forEach((it) => { providerCatalogViewState[it.id] = 0; providerCatalogItemsById[it.id] = it; });
+  const catalogByCategory = {};
+  catalogItems.forEach((it) => { (catalogByCategory[it.category] = catalogByCategory[it.category] || []).push(it); });
   document.getElementById('provider-view-content').innerHTML = `
     <div class="profile-hero">
       <img class="avatar-lg" src="${avatarSrc(p)}" loading="lazy">
@@ -1516,6 +1624,28 @@ async function viewProviderProfile(providerId, returnTo = 'proposals') {
       <div class="stat-box"><div class="num">${p.rating_count || 0}</div><div class="lab">Avaliações</div></div>
       <div class="stat-box"><div class="num">${p.completed_count}</div><div class="lab">Concluídos</div></div>
     </div>
+    ${Object.keys(catalogByCategory).length ? Object.entries(catalogByCategory).map(([cat, items]) => `
+      <div class="section-title" style="margin-top:16px;"><h3>Contratar agora — ${cat}</h3></div>
+      <p style="font-size:12.5px;color:var(--ink-soft);margin-top:0;">Preço fixo, sem precisar esperar proposta.</p>
+      ${items.map((it) => `
+        <div style="display:flex;align-items:center;gap:8px;border:1.5px solid var(--line);border-radius:11px;padding:10px 12px;margin-bottom:8px;">
+          <div style="flex:1;">
+            <div style="font-size:13.5px;font-weight:700;">${it.name}</div>
+            <div style="font-size:12px;color:var(--ink-soft);">${money(it.price)} por ${it.unit}</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;background:var(--bg-soft, #F3F4F6);border-radius:20px;padding:4px 8px;">
+            <span style="cursor:pointer;color:var(--ink-soft);font-size:16px;font-weight:700;padding:0 4px;" onclick="adjustCatalogQty('${it.id}','${cat.replace(/'/g, "\\'")}',-1)">−</span>
+            <span id="catalog-qty-${it.id}" style="min-width:14px;text-align:center;font-size:13px;font-weight:700;">0</span>
+            <span style="cursor:pointer;color:var(--primary);font-size:16px;font-weight:700;padding:0 4px;" onclick="adjustCatalogQty('${it.id}','${cat.replace(/'/g, "\\'")}',1)">+</span>
+          </div>
+        </div>
+      `).join('')}
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 2px 10px;">
+        <span style="font-size:12.5px;color:var(--ink-soft);">Total</span>
+        <span id="catalog-total-${cssId(cat)}" style="font-size:16px;font-weight:700;">${money(0)}</span>
+      </div>
+      <button class="btn btn-primary btn-block" onclick="checkoutProviderCatalog('${providerId}','${cat.replace(/'/g, "\\'")}','${p.name.replace(/'/g, "\\'")}')">Contratar agora</button>
+    `).join('') : ''}
     ${p.bio ? `<div class="section-title"><h3>Sobre</h3></div><p style="font-size:13.5px;color:var(--ink-soft);">${p.bio}</p>` : ''}
     ${p.portfolio && p.portfolio.length ? `
       <div class="section-title"><h3>Trabalhos realizados</h3></div>
@@ -1534,6 +1664,33 @@ async function viewProviderProfile(providerId, returnTo = 'proposals') {
       `).join('')}</div>
     ` : `<div class="empty-state" style="padding:20px;"><p>Ainda sem avaliações públicas.</p></div>`}
   `;
+}
+
+let providerCatalogViewState = {};
+let providerCatalogItemsById = {};
+
+function adjustCatalogQty(itemId, category, delta) {
+  const current = providerCatalogViewState[itemId] || 0;
+  providerCatalogViewState[itemId] = Math.max(0, current + delta);
+  document.getElementById(`catalog-qty-${itemId}`).textContent = providerCatalogViewState[itemId];
+  const total = Object.entries(providerCatalogViewState)
+    .filter(([id]) => providerCatalogItemsById[id]?.category === category)
+    .reduce((sum, [id, qty]) => sum + qty * parseFloat(providerCatalogItemsById[id].price), 0);
+  const totalEl = document.getElementById(`catalog-total-${cssId(category)}`);
+  if (totalEl) totalEl.textContent = money(total);
+}
+
+async function checkoutProviderCatalog(providerId, category, providerName) {
+  const items = Object.entries(providerCatalogViewState)
+    .filter(([id, qty]) => qty > 0 && providerCatalogItemsById[id]?.category === category)
+    .map(([itemId, quantity]) => ({ itemId, quantity }));
+  if (items.length === 0) { alert('Escolha a quantidade de pelo menos um item.'); return; }
+  try {
+    const created = await api(`/providers/${providerId}/catalog/checkout`, { method: 'POST', body: { category, items } });
+    goToPaymentScreen(created, providerName);
+  } catch (err) {
+    alert(err.message);
+  }
 }
 
 async function checkFavorited(providerId) {
