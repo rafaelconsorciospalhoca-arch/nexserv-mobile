@@ -1414,6 +1414,8 @@ async function openRequestForm(catName, serviceName) {
   }
 
   requestDraft = { category: catName, serviceName, preferredProviderId: null };
+  document.getElementById('req-view-providers-link').style.display =
+    (FIXED_PRICE_CATEGORIES.includes(catName) || KM_RATE_CATEGORIES.includes(catName)) ? '' : 'none';
   document.getElementById('req-service').value = serviceName;
   document.getElementById('req-description').value = '';
   document.getElementById('req-photos').value = '';
@@ -3603,16 +3605,32 @@ async function renderFavoritesScreen() {
 }
 
 // ---------- Todos os profissionais ----------
+let allProvidersCategory = null;
+
+function viewProvidersForRequestCategory() {
+  allProvidersCategory = requestDraft?.category || null;
+  showScreen('all-providers');
+}
+
 async function renderAllProvidersScreen() {
   const el = document.getElementById('all-providers-list');
+  const sortWrap = document.getElementById('all-providers-sort-wrap');
+  document.getElementById('all-providers-title').textContent = allProvidersCategory || 'Profissionais';
+  sortWrap.style.display = allProvidersCategory ? '' : 'none';
+  const sort = allProvidersCategory ? document.getElementById('all-providers-sort').value : '';
   el.innerHTML = '<div class="empty-state" style="padding:40px 20px;"><p>Carregando...</p></div>';
-  const providers = await api('/providers/directory/list');
+  const query = allProvidersCategory
+    ? `?category=${encodeURIComponent(allProvidersCategory)}${sort ? `&sort=${sort}` : ''}`
+    : '';
+  const providers = await api(`/providers/directory/list${query}`);
   el.innerHTML = providers.length ? `<div class="provider-grid">${providers.map((p) => `
     <div class="p-card" onclick="viewProviderProfile('${p.id}','all-providers')">
       <div class="p-photo"><img src="${avatarSrc(p)}" loading="lazy"></div>
       <div class="p-name">${firstNameLastInitial(p.name)}${p.is_founder ? ' 🏆' : ''}${p.is_subscriber ? ' ⭐' : ''}${p.featured ? '<span class="badge-featured">★</span>' : ''}</div>
       <div class="p-role">${(p.categories || [])[0] || 'Prestador'}</div>
       <div class="p-rating">★ ${p.rating_avg ? parseFloat(p.rating_avg).toFixed(1) : '—'} (${p.rating_count || 0})</div>
+      ${p.min_catalog_price != null ? `<div class="p-role" style="color:var(--primary);font-weight:700;">a partir de ${money(p.min_catalog_price)}</div>` : ''}
+      ${p.has_km_rate ? `<div class="p-role" style="color:var(--primary);font-weight:700;">preço por km</div>` : ''}
     </div>
   `).join('')}</div>` : '<div class="empty-state"><span class="glyph">🔍</span><p>Nenhum profissional cadastrado ainda.</p></div>';
 }
