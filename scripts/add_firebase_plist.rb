@@ -11,7 +11,7 @@ project = Xcodeproj::Project.open(project_path)
 target = project.targets.find { |t| t.name == 'App' } || project.targets.first
 group = project.main_group.groups.find { |g| g.path == 'App' || g.name == 'App' } || project.main_group
 
-plist_path = 'App/GoogleService-Info.plist'
+plist_path = 'GoogleService-Info.plist'
 existing = group.files.find { |f| f.path == 'GoogleService-Info.plist' }
 
 if existing
