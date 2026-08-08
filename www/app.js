@@ -584,6 +584,28 @@ async function loadProviderCategoriesScreen() {
   renderProviderCategoryChips(categories);
   renderProviderServiceCityChips();
   loadProviderCatalogSections();
+  loadProviderTravelFee();
+}
+
+async function loadProviderTravelFee() {
+  const { fee } = await api('/provider/catalog-travel-fee');
+  const input = document.getElementById('provider-travel-fee-input');
+  input.value = fee != null ? Number(fee).toFixed(2).replace('.', ',') : '';
+}
+
+async function saveProviderTravelFee() {
+  const errorEl = document.getElementById('provider-travel-fee-error');
+  errorEl.textContent = '';
+  const raw = document.getElementById('provider-travel-fee-input').value;
+  const fee = raw ? parseMoneyInput(raw) : null;
+  try {
+    await api('/provider/catalog-travel-fee', { method: 'PUT', body: { fee } });
+    errorEl.style.color = 'var(--success)';
+    errorEl.textContent = 'Taxa salva.';
+  } catch (err) {
+    errorEl.style.color = 'var(--danger)';
+    errorEl.textContent = err.message;
+  }
 }
 
 function renderProviderServiceCityChips() {
@@ -1610,6 +1632,11 @@ async function viewProviderProfile(providerId, returnTo = 'proposals') {
   catalogItems.forEach((it) => { providerCatalogViewState[it.id] = 0; providerCatalogItemsById[it.id] = it; });
   const catalogByCategory = {};
   catalogItems.forEach((it) => { (catalogByCategory[it.category] = catalogByCategory[it.category] || []).push(it); });
+  // Taxa de deslocamento só entra na conta se o cliente for de cidade
+  // diferente da do prestador — mesma regra usada no checkout do backend.
+  const rawTravelFee = parseFloat(p.catalog_travel_fee) || 0;
+  const isDifferentCity = user?.city && p.city && (normalize(user.city) !== normalize(p.city) || user.state !== p.state);
+  providerCatalogTravelFee = rawTravelFee > 0 && isDifferentCity ? rawTravelFee : 0;
   document.getElementById('provider-view-content').innerHTML = `
     <div class="profile-hero">
       <img class="avatar-lg" src="${avatarSrc(p)}" loading="lazy">
@@ -1640,9 +1667,10 @@ async function viewProviderProfile(providerId, returnTo = 'proposals') {
           </div>
         </div>
       `).join('')}
+      ${providerCatalogTravelFee > 0 ? `<p style="font-size:11.5px;color:var(--ink-faint);margin:0 0 4px;">+ ${money(providerCatalogTravelFee)} de taxa de deslocamento (cidade diferente da do prestador), incluída no total abaixo.</p>` : ''}
       <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 2px 10px;">
         <span style="font-size:12.5px;color:var(--ink-soft);">Total</span>
-        <span id="catalog-total-${cssId(cat)}" style="font-size:16px;font-weight:700;">${money(0)}</span>
+        <span id="catalog-total-${cssId(cat)}" style="font-size:16px;font-weight:700;">${money(providerCatalogTravelFee)}</span>
       </div>
       <button class="btn btn-primary btn-block" onclick="checkoutProviderCatalog('${providerId}','${cat.replace(/'/g, "\\'")}','${p.name.replace(/'/g, "\\'")}')">Contratar agora</button>
     `).join('') : ''}
@@ -1668,16 +1696,17 @@ async function viewProviderProfile(providerId, returnTo = 'proposals') {
 
 let providerCatalogViewState = {};
 let providerCatalogItemsById = {};
+let providerCatalogTravelFee = 0;
 
 function adjustCatalogQty(itemId, category, delta) {
   const current = providerCatalogViewState[itemId] || 0;
   providerCatalogViewState[itemId] = Math.max(0, current + delta);
   document.getElementById(`catalog-qty-${itemId}`).textContent = providerCatalogViewState[itemId];
-  const total = Object.entries(providerCatalogViewState)
+  const itemsTotal = Object.entries(providerCatalogViewState)
     .filter(([id]) => providerCatalogItemsById[id]?.category === category)
     .reduce((sum, [id, qty]) => sum + qty * parseFloat(providerCatalogItemsById[id].price), 0);
   const totalEl = document.getElementById(`catalog-total-${cssId(category)}`);
-  if (totalEl) totalEl.textContent = money(total);
+  if (totalEl) totalEl.textContent = money(itemsTotal + providerCatalogTravelFee);
 }
 
 async function checkoutProviderCatalog(providerId, category, providerName) {
