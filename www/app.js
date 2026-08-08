@@ -735,10 +735,15 @@ async function saveProviderCategories() {
 // ---------- Catálogo de preço fixo do prestador ----------
 // Só liberado nessas categorias por enquanto (lançamento em etapas, como o
 // próprio sistema de categorias com cobertura fez antes).
-const FIXED_PRICE_CATEGORIES = ['Eletricista', 'Diarista/Limpeza', 'Hidráulica', 'Montagem de Móveis', 'Marido de Aluguel', 'Babá & Cuidadores', 'Cuidados a Idosos'];
+const FIXED_PRICE_CATEGORIES = [
+  'Eletricista', 'Diarista/Limpeza', 'Hidráulica', 'Montagem de Móveis', 'Marido de Aluguel', 'Babá & Cuidadores', 'Cuidados a Idosos',
+  'Ar-Condicionado', 'Pintura', 'Chaveiro', 'Jardinagem', 'Dedetização', 'Vidraçaria', 'Gesso & Drywall', 'Pisos & Azulejos',
+  'Segurança & CFTV', 'Técnico de Informática', 'Manicure a domicílio', 'Personal Trainer', 'Costura & Reparos',
+  'Cuidados com Pets', 'Pet Care', 'Piscinas', 'Fotografia & Vídeo', 'Música & DJ',
+];
 // Categorias de mobilidade — preço calculado por km (origem/destino), não por
 // item. Fluxo separado do catálogo de itens, ver loadProviderKmRateSections.
-const KM_RATE_CATEGORIES = ['Motoboy', 'Motorista de App', 'Fretes & Transporte', 'Fretes e Mudanças', 'Guincho & Reboque', 'Mudanças'];
+const KM_RATE_CATEGORIES = ['Motoboy', 'Motorista de App', 'Fretes & Transporte', 'Fretes e Mudanças', 'Guincho & Reboque', 'Mudanças', 'Guincho', 'Viagens'];
 let providerCatalogState = {};
 
 async function loadProviderCatalogSections() {
