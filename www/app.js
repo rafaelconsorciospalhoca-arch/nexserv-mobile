@@ -3772,6 +3772,55 @@ function renderCityList(cities) {
   `).join('');
 }
 
+// No app nativo usa o plugin do Capacitor (lida certo com a permissão de
+// runtime do Android — a navigator.geolocation pura do WebView costuma
+// travar/nunca disparar o prompt de permissão nesse contexto). No
+// navegador/PWA, cai pra API padrão do browser.
+async function getCurrentCoords() {
+  const Geo = window.Capacitor?.Plugins?.Geolocation;
+  if (Geo) {
+    const perm = await Geo.checkPermissions();
+    if (perm.location !== 'granted' && perm.coarseLocation !== 'granted') {
+      const asked = await Geo.requestPermissions();
+      if (asked.location !== 'granted' && asked.coarseLocation !== 'granted') {
+        throw new Error('Permissão de localização negada.');
+      }
+    }
+    const pos = await Geo.getCurrentPosition();
+    return pos.coords;
+  }
+  if (!navigator.geolocation) {
+    throw new Error('Seu dispositivo não suporta localização automática — busque sua cidade na lista.');
+  }
+  return new Promise((resolve, reject) => {
+    navigator.geolocation.getCurrentPosition(
+      (position) => resolve(position.coords),
+      () => reject(new Error('Não conseguimos acessar sua localização — verifique a permissão e tente de novo, ou busque sua cidade na lista.'))
+    );
+  });
+}
+
+async function useMyLocation() {
+  const btn = document.getElementById('use-my-location-btn');
+  btn.disabled = true;
+  btn.textContent = 'Localizando...';
+  try {
+    const coords = await getCurrentCoords();
+    const found = await api(`/location/reverse-geocode?lat=${coords.latitude}&lng=${coords.longitude}`);
+    const match = availableCitiesCache.find((c) => normalize(c.city) === normalize(found.city) && c.state === found.state);
+    if (match) {
+      selectCity(match.city, match.state);
+    } else {
+      alert(`Identificamos que você está em ${found.city}/${found.state}, mas ainda não atendemos essa cidade. Fique de olho!`);
+    }
+  } catch (err) {
+    alert(err.message || 'Não conseguimos identificar sua localização.');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '📍 Usar minha localização';
+  }
+}
+
 function setSelectedCityState(city, state) {
   localStorage.setItem('chama_selected_city', JSON.stringify({ city, state }));
   localStorage.setItem('chama_city_prompt_seen', '1');
