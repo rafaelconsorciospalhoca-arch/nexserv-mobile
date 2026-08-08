@@ -1808,6 +1808,7 @@ async function quoteKmRate(providerId, category, providerName) {
     });
     resultEl.innerHTML = `
       <p style="font-size:12.5px;color:var(--ink-soft);margin:0 0 6px;">${quote.distanceKm} km — total estimado</p>
+      ${quote.minimumApplied ? `<p style="font-size:11.5px;color:var(--ink-faint);margin:0 0 6px;">Valor mínimo de pedido aplicado.</p>` : ''}
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
         <span style="font-size:12.5px;color:var(--ink-soft);">Total</span>
         <span style="font-size:16px;font-weight:700;">${money(quote.price)}</span>
