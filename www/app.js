@@ -922,6 +922,17 @@ async function enterApp() {
   }
 }
 
+// ---------- Cache local (mostra o que já tem guardado na hora, sem esperar
+// a rede — depois a busca real acontece igual sempre aconteceu e atualiza a
+// tela de novo se algo mudou). Puramente aditivo: não troca a forma como os
+// dados chegam, só adianta a primeira pintura da tela.
+function getLocalCache(key) {
+  try { return JSON.parse(localStorage.getItem('chama_cache_' + key)); } catch { return null; }
+}
+function setLocalCache(key, data) {
+  try { localStorage.setItem('chama_cache_' + key, JSON.stringify(data)); } catch { /* localStorage cheio/indisponível, ignora */ }
+}
+
 // ---------- Home (cliente) ----------
 let categoriesCacheCityKey = null;
 
@@ -937,20 +948,13 @@ async function ensureCategories() {
   return categoriesCache;
 }
 
-async function loadHomeCategories() {
-  const guestAuthRow = document.getElementById('guest-auth-row');
-  if (guestAuthRow) guestAuthRow.style.display = token ? 'none' : 'flex';
-
-  const selectedCity = getSelectedCity();
-  document.getElementById('home-location').textContent = selectedCity.city ? `${selectedCity.city}${selectedCity.state ? ' - ' + selectedCity.state : ''}` : 'Todo o Brasil';
-
-  const categories = await ensureCategories();
-  // Categorias com prestador aparecem primeiro (cliente vê de cara o que já
-  // dá pra pedir), depois ordenadas pelas mais acessadas de verdade —
-  // requestCount é quantos pedidos já foram criados nessa categoria (medida
-  // de demanda real, melhor sinal do que só visualização/clique), com número
-  // de profissionais e ordem alfabética como desempate. Mostra mais
-  // categorias (9 em vez de 6) pra dar mais opções de cara na home.
+// Categorias com prestador aparecem primeiro (cliente vê de cara o que já dá
+// pra pedir), depois ordenadas pelas mais acessadas de verdade — requestCount
+// é quantos pedidos já foram criados nessa categoria (medida de demanda real,
+// melhor sinal do que só visualização/clique), com número de profissionais e
+// ordem alfabética como desempate. Mostra mais categorias (9 em vez de 6) pra
+// dar mais opções de cara na home.
+function renderHomeCategoryGrid(categories) {
   const sorted = [...categories].sort((a, b) => {
     if (a.hasProviders !== b.hasProviders) return b.hasProviders - a.hasProviders;
     if (b.requestCount !== a.requestCount) return b.requestCount - a.requestCount;
@@ -958,6 +962,24 @@ async function loadHomeCategories() {
     return a.name.localeCompare(b.name);
   });
   document.getElementById('home-chip-grid').innerHTML = sorted.slice(0, 9).map(categoryChipHTML).join('');
+}
+
+async function loadHomeCategories() {
+  const guestAuthRow = document.getElementById('guest-auth-row');
+  if (guestAuthRow) guestAuthRow.style.display = token ? 'none' : 'flex';
+
+  const selectedCity = getSelectedCity();
+  document.getElementById('home-location').textContent = selectedCity.city ? `${selectedCity.city}${selectedCity.state ? ' - ' + selectedCity.state : ''}` : 'Todo o Brasil';
+
+  // Pinta na hora com o que já tinha guardado da última visita (se tiver),
+  // enquanto a busca de verdade abaixo roda igual sempre rodou.
+  const cacheKey = `categories_${selectedCity.city || ''}|${selectedCity.state || ''}`;
+  const cachedCategories = getLocalCache(cacheKey);
+  if (cachedCategories) renderHomeCategoryGrid(cachedCategories);
+
+  const categories = await ensureCategories();
+  setLocalCache(cacheKey, categories);
+  renderHomeCategoryGrid(categories);
 
   const howSteps = [
     { icon: '🔍', title: '1. Escolha o serviço', sub: 'Encontre o serviço que você precisa' },
@@ -1029,13 +1051,22 @@ function renderTopBannerCarousel(containerId, banners) {
   show();
 }
 
-async function loadHomeBanner() {
-  const selectedCity = getSelectedCity();
-  const banners = await api(`/banner-ads/active?city=${encodeURIComponent(selectedCity.city || '')}`);
+function renderHomeBanners(banners) {
   const topBanners = banners.filter((b) => b.position === 'top');
   const bottom = banners.find((b) => b.position === 'bottom');
   renderTopBannerCarousel('home-banner-top', topBanners);
   document.getElementById('home-banner-bottom').innerHTML = bottom ? bannerHTML(bottom) : '';
+}
+
+async function loadHomeBanner() {
+  const selectedCity = getSelectedCity();
+  const cacheKey = `banners_${selectedCity.city || ''}`;
+  const cachedBanners = getLocalCache(cacheKey);
+  if (cachedBanners) renderHomeBanners(cachedBanners);
+
+  const banners = await api(`/banner-ads/active?city=${encodeURIComponent(selectedCity.city || '')}`);
+  setLocalCache(cacheKey, banners);
+  renderHomeBanners(banners);
 }
 
 function firstNameLastInitial(name) {
@@ -1043,8 +1074,7 @@ function firstNameLastInitial(name) {
   return parts.length > 1 ? `${parts[0]} ${parts[1][0]}.` : (parts[0] || '');
 }
 
-async function loadFeaturedProviders() {
-  const providers = await api('/providers/featured/list');
+function renderFeaturedProviders(providers) {
   const el = document.getElementById('featured-providers');
   el.innerHTML = providers.length ? providers.map((p) => `
     <div class="pro-card" onclick="viewProviderProfile('${p.id}','home')">
@@ -1059,6 +1089,16 @@ async function loadFeaturedProviders() {
       </div>
     </div>
   `).join('') : '<p style="font-size:12.5px;color:var(--ink-faint);">Ainda não temos profissionais em destaque na sua região.</p>';
+}
+
+async function loadFeaturedProviders() {
+  const cacheKey = 'featured_providers';
+  const cachedProviders = getLocalCache(cacheKey);
+  if (cachedProviders) renderFeaturedProviders(cachedProviders);
+
+  const providers = await api('/providers/featured/list');
+  setLocalCache(cacheKey, providers);
+  renderFeaturedProviders(providers);
 }
 
 function statusPillHTML(status) {
