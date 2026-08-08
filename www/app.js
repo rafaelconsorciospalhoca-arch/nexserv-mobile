@@ -855,7 +855,35 @@ function doLogout() {
   showScreen('login');
 }
 
+// Notificação push nativa — só existe dentro do app empacotado (iOS/Android
+// via Codemagic), nunca no navegador/PWA (window.Capacitor não existe lá).
+// Roda em segundo plano, best-effort: se o usuário negar a permissão ou o
+// plugin não estiver disponível, o app segue normal sem push, só sem esse
+// aviso extra (WhatsApp e notificação dentro do app continuam funcionando).
+async function initPushNotifications() {
+  const FirebaseMessaging = window.Capacitor?.Plugins?.FirebaseMessaging;
+  if (!FirebaseMessaging) return;
+  try {
+    const { receive } = await FirebaseMessaging.checkPermissions();
+    if (receive !== 'granted') {
+      const { receive: asked } = await FirebaseMessaging.requestPermissions();
+      if (asked !== 'granted') return;
+    }
+    const { token } = await FirebaseMessaging.getToken();
+    if (!token) return;
+    const platform = window.Capacitor.getPlatform(); // 'ios' | 'android'
+    await api('/notifications/push-token', { method: 'POST', body: { token, platform } });
+
+    // Notificação chegando com o app aberto (senão só aparece quando fechado)
+    // — atualiza a bolinha de novidade na hora, sem precisar reabrir o app.
+    FirebaseMessaging.addListener('notificationReceived', () => refreshNotifBadge());
+  } catch (err) {
+    console.error('Falha ao configurar push notification:', err.message);
+  }
+}
+
 async function enterApp() {
+  initPushNotifications();
   providerAwaitingExpansion = false;
   if (user.role === 'provider') {
     try {

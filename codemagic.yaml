@@ -33,6 +33,10 @@ workflows:
         script: npm ci
       - name: Sincronizar Capacitor
         script: npx cap sync ios
+      - name: Adicionar GoogleService-Info.plist ao projeto Xcode (push notifications)
+        script: |
+          gem install xcodeproj --no-document
+          ruby scripts/add_firebase_plist.rb
       - name: Configurar assinatura de código no projeto Xcode
         script: xcode-project use-profiles
       - name: Numerar o build (obrigatório ser maior que o anterior na Apple)

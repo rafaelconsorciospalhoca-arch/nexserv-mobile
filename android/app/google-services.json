@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "591692403438",
+    "project_id": "nexserv-2cc67",
+    "storage_bucket": "nexserv-2cc67.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:591692403438:android:fee6dfe20f7266232319ff",
+        "android_client_info": {
+          "package_name": "br.com.digitiva.nexserv"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA7KJkBOGWfrSpuDitRhUYz36AJvjkbJbo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
