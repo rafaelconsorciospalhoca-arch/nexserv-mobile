@@ -176,7 +176,7 @@ function avatarBoxHTML(name, photoUrl) {
 }
 
 const statusLabels = {
-  pending: 'Aguardando propostas', accepted: 'Aceito', in_progress: 'Em andamento',
+  pending: 'Aguardando propostas', searching: 'Buscando profissional', accepted: 'Aceito', in_progress: 'Em andamento',
   awaiting_approval: 'Aguardando sua aprovação', done: 'Concluído', canceled: 'Cancelado',
   rejected: 'Recusada',
 };
@@ -1130,6 +1130,13 @@ async function enterApp() {
       } catch { /* payload inválido, ignora */ }
     }
   }
+
+  // Mesma lógica acima, mas pro serviço de preço fechado (ver startInstantCheckout).
+  const pendingInstantServiceId = localStorage.getItem('chama_pending_instant_service');
+  if (pendingInstantServiceId) {
+    localStorage.removeItem('chama_pending_instant_service');
+    if (user.role === 'client') openInstantServiceDetail(pendingInstantServiceId).catch(() => {});
+  }
 }
 
 // ---------- Cache local (mostra o que já tem guardado na hora, sem esperar
@@ -1203,6 +1210,7 @@ async function loadHomeCategories() {
   `).join('');
 
   loadHomeBanner();
+  loadHomeInstantServices();
 }
 
 function bannerHTML(b) {
@@ -1311,6 +1319,353 @@ async function loadFeaturedProviders() {
   renderFeaturedProviders(providers);
 }
 
+// ---------- Serviços com preço fechado (contrate agora) ----------
+// Terceira modalidade, ao lado de orçamento (requests.js) e do catálogo
+// próprio do prestador (provider.js /catalog) — aqui é a NexServ quem fixa
+// o preço e despacha o pedido pago pra todos os prestadores elegíveis, o
+// primeiro que aceitar garante o serviço (ver src/routes/instantServices.js
+// e src/services/serviceDispatch.js).
+function svcCardHTML(s) {
+  const price = s.display_price != null ? money(s.display_price) : 'Sob consulta';
+  return `
+    <div class="svc-card" onclick="openInstantServiceDetail('${s.id}')">
+      <div class="svc-photo">
+        ${s.image_url ? `<img src="${imgProxy(s.image_url)}" loading="lazy">` : (categoryIcon[s.category] || '🔧')}
+      </div>
+      <div class="svc-body">
+        <div class="svc-name">${esc(s.name)}</div>
+        <div class="svc-price">${price}${s.variation_count > 0 ? ' +' : ''}</div>
+        <div class="svc-cat">${esc(s.category)}</div>
+      </div>
+    </div>
+  `;
+}
+
+function renderHomeInstantServices(list) {
+  const section = document.getElementById('home-instant-services-section');
+  if (!list.length) { section.style.display = 'none'; return; }
+  section.style.display = 'block';
+  document.getElementById('home-instant-services').innerHTML = list.map(svcCardHTML).join('');
+}
+
+async function loadHomeInstantServices() {
+  try {
+    const list = await api('/services?homeOnly=true');
+    renderHomeInstantServices(list);
+  } catch { /* recurso novo — se o cache antigo do app ainda não tiver essa rota, ignora */ }
+}
+
+function openInstantServicesScreen() { showScreen('instant-services'); }
+
+let instantServicesAll = [];
+let instantServicesCategory = 'Todos';
+
+async function renderInstantServicesScreen() {
+  document.getElementById('instant-services-search').value = '';
+  document.getElementById('instant-services-list').innerHTML = '<div class="empty-state" style="grid-column:1/-1;padding:40px 20px;"><p>Carregando...</p></div>';
+  instantServicesAll = await api('/services');
+  instantServicesCategory = 'Todos';
+  const categories = ['Todos', ...new Set(instantServicesAll.flatMap((s) => s.categories && s.categories.length ? s.categories : [s.category]))];
+  document.getElementById('instant-services-category-tabs').innerHTML = categories.map((c) => `
+    <button class="${c === instantServicesCategory ? 'active' : ''}" onclick="setInstantServicesCategory('${c.replace(/'/g, "\\'")}')">${c}</button>
+  `).join('');
+  renderInstantServicesList();
+}
+
+function setInstantServicesCategory(cat) {
+  instantServicesCategory = cat;
+  document.querySelectorAll('#instant-services-category-tabs button').forEach((b) => b.classList.toggle('active', b.textContent === cat));
+  renderInstantServicesList();
+}
+
+function filterInstantServices(query) {
+  renderInstantServicesList(query);
+}
+
+function renderInstantServicesList(query) {
+  const q = normalize(query ?? document.getElementById('instant-services-search').value);
+  const matches = instantServicesAll.filter((s) =>
+    (instantServicesCategory === 'Todos' || (s.categories && s.categories.length ? s.categories.includes(instantServicesCategory) : s.category === instantServicesCategory)) &&
+    (!q || normalize(s.name).includes(q))
+  );
+  document.getElementById('instant-services-list').innerHTML = matches.length
+    ? matches.map(svcCardHTML).join('')
+    : '<div class="empty-state" style="grid-column:1/-1;"><span class="glyph">🔍</span><p>Nenhum serviço encontrado.</p></div>';
+}
+
+let instantDetailService = null;
+let instantDetailSelectedVariationIds = new Set();
+let instantDetailQuantity = 1;
+
+async function openInstantServiceDetail(id) {
+  const s = await api(`/services/${id}`);
+  instantDetailService = s;
+  // Primeira variação vem pré-selecionada — mínimo 1 sempre (ver
+  // toggleInstantVariation), cliente pode marcar mais de uma pra somar
+  // (ex: "Montagem" + "Desmontagem" de móveis).
+  instantDetailSelectedVariationIds = new Set(s.variations && s.variations.length ? [s.variations[0].id] : []);
+  instantDetailQuantity = 1;
+  renderInstantServiceDetail();
+  showScreen('instant-service-detail');
+}
+
+function selectedInstantVariations() {
+  return (instantDetailService.variations || []).filter((v) => instantDetailSelectedVariationIds.has(v.id));
+}
+
+function incrementInstantQuantity() {
+  if (instantDetailQuantity >= 20) return;
+  instantDetailQuantity++;
+  renderInstantServiceDetail();
+}
+
+function decrementInstantQuantity() {
+  if (instantDetailQuantity <= 1) return;
+  instantDetailQuantity--;
+  renderInstantServiceDetail();
+}
+
+function renderInstantServiceDetail() {
+  const s = instantDetailService;
+  document.getElementById('instant-detail-header').textContent = s.name;
+  document.getElementById('instant-detail-category').textContent = s.category;
+  document.getElementById('instant-detail-name').textContent = s.name;
+  const shortEl = document.getElementById('instant-detail-short');
+  shortEl.textContent = s.short_description || '';
+  shortEl.style.display = s.short_description ? 'block' : 'none';
+  const descEl = document.getElementById('instant-detail-description');
+  descEl.textContent = s.description || '';
+  descEl.style.display = s.description ? 'block' : 'none';
+  document.getElementById('instant-detail-duration').textContent = s.duration_label ? `Duração estimada: ${s.duration_label}` : '';
+
+  const imgWrap = document.getElementById('instant-detail-image-wrap');
+  if (s.image_url) { imgWrap.style.display = 'block'; document.getElementById('instant-detail-image').src = imgProxy(s.image_url); }
+  else imgWrap.style.display = 'none';
+
+  const variationsField = document.getElementById('instant-detail-variations-field');
+  if (s.variations && s.variations.length) {
+    variationsField.style.display = 'block';
+    document.getElementById('instant-detail-variations').innerHTML = s.variations.map((v) => `
+      <button type="button" class="chip-opt ${instantDetailSelectedVariationIds.has(v.id) ? 'selected' : ''}" onclick="toggleInstantVariation('${v.id}')">${esc(v.name)} — ${v.display_price != null ? money(v.display_price) : 'sob consulta'}</button>
+    `).join('');
+  } else {
+    variationsField.style.display = 'none';
+  }
+
+  const selectedVariations = selectedInstantVariations();
+  const unitPrice = selectedVariations.length
+    ? selectedVariations.reduce((sum, v) => sum + (v.display_price || 0), 0)
+    : s.display_price;
+  document.getElementById('instant-detail-quantity').textContent = instantDetailQuantity;
+  const unitPriceEl = document.getElementById('instant-detail-unit-price');
+  if (unitPrice != null) {
+    document.getElementById('instant-detail-price').textContent = money(unitPrice * instantDetailQuantity);
+    unitPriceEl.style.display = instantDetailQuantity > 1 ? 'block' : 'none';
+    unitPriceEl.textContent = `${money(unitPrice)} cada × ${instantDetailQuantity}`;
+  } else {
+    document.getElementById('instant-detail-price').textContent = 'Sob consulta';
+    unitPriceEl.style.display = 'none';
+  }
+
+  const includedWrap = document.getElementById('instant-detail-included-wrap');
+  if (s.included_items && s.included_items.length) {
+    includedWrap.style.display = 'block';
+    document.getElementById('instant-detail-included').innerHTML = s.included_items.map((i) => `<li>${esc(i)}</li>`).join('');
+  } else includedWrap.style.display = 'none';
+
+  const excludedWrap = document.getElementById('instant-detail-excluded-wrap');
+  if (s.excluded_items && s.excluded_items.length) {
+    excludedWrap.style.display = 'block';
+    document.getElementById('instant-detail-excluded').innerHTML = s.excluded_items.map((i) => `<li>${esc(i)}</li>`).join('');
+  } else excludedWrap.style.display = 'none';
+}
+
+function toggleInstantVariation(variationId) {
+  if (instantDetailSelectedVariationIds.has(variationId)) {
+    // Mínimo 1 sempre selecionada — não deixa desmarcar a última.
+    if (instantDetailSelectedVariationIds.size <= 1) return;
+    instantDetailSelectedVariationIds.delete(variationId);
+  } else {
+    instantDetailSelectedVariationIds.add(variationId);
+  }
+  renderInstantServiceDetail();
+}
+
+function startInstantCheckout() {
+  if (!token) {
+    localStorage.setItem('chama_pending_instant_service', instantDetailService.id);
+    openRegister('client');
+    return;
+  }
+  const selectedVariations = selectedInstantVariations();
+  const unitPrice = selectedVariations.length
+    ? selectedVariations.reduce((sum, v) => sum + (v.display_price || 0), 0)
+    : instantDetailService.display_price;
+  if (unitPrice == null) { alert('Este serviço ainda não tem preço configurado. Tente novamente mais tarde.'); return; }
+  const selectedCity = getSelectedCity();
+  const baseName = selectedVariations.length ? `${instantDetailService.name} — ${selectedVariations.map((v) => v.name).join(' + ')}` : instantDetailService.name;
+  document.getElementById('instant-addr-service-name').textContent = instantDetailQuantity > 1 ? `${baseName} (${instantDetailQuantity}x)` : baseName;
+  document.getElementById('instant-addr-price').textContent = money(unitPrice * instantDetailQuantity);
+  document.getElementById('instant-addr-zip').value = user.zipCode || '';
+  document.getElementById('instant-addr-neighborhood').value = user.neighborhood || '';
+  document.getElementById('instant-addr-city').value = selectedCity.city || user.city || '';
+  document.getElementById('instant-addr-state').value = selectedCity.state || user.state || '';
+  document.getElementById('instant-addr-description').value = '';
+  document.getElementById('instant-addr-error').textContent = '';
+  showScreen('instant-checkout-address');
+}
+
+let instantCheckoutMode = false;
+let instantCheckoutContext = null;
+
+function goToInstantPaymentScreen() {
+  const errorEl = document.getElementById('instant-addr-error');
+  errorEl.textContent = '';
+  const neighborhood = document.getElementById('instant-addr-neighborhood').value.trim();
+  const city = document.getElementById('instant-addr-city').value.trim();
+  const state = document.getElementById('instant-addr-state').value.trim();
+  if (!neighborhood || !city) { errorEl.textContent = 'Informe bairro e cidade.'; return; }
+
+  const selectedVariations = selectedInstantVariations();
+  const unitPrice = selectedVariations.length
+    ? selectedVariations.reduce((sum, v) => sum + (v.display_price || 0), 0)
+    : instantDetailService.display_price;
+  const quantity = instantDetailQuantity;
+  const baseName = selectedVariations.length ? `${instantDetailService.name} — ${selectedVariations.map((v) => v.name).join(' + ')}` : instantDetailService.name;
+  const price = Math.round(unitPrice * quantity * 100) / 100;
+  instantCheckoutContext = {
+    serviceId: instantDetailService.id,
+    variationIds: selectedVariations.map((v) => v.id),
+    serviceLabel: quantity > 1 ? `${baseName} (${quantity}x)` : baseName,
+    quantity,
+    price,
+    zipCode: document.getElementById('instant-addr-zip').value.trim(),
+    neighborhood, city, state,
+    description: document.getElementById('instant-addr-description').value.trim(),
+  };
+
+  document.getElementById('pay-total').textContent = money(price);
+  document.getElementById('pay-details').textContent = instantCheckoutContext.serviceLabel;
+  document.getElementById('pay-coupon-section').style.display = 'none';
+  document.getElementById('pay-discount-row').style.display = 'none';
+  document.getElementById('pay-credit-row').style.display = 'none';
+  installmentsEligible = false;
+  paymentInFlight = false;
+  instantCheckoutMode = true;
+  document.getElementById('confirm-payment-btn').disabled = false;
+  showScreen('payment');
+  selectPayMethod(document.querySelector('.screen[data-screen="payment"] .pay-method[data-method="pix"]'));
+}
+
+async function confirmInstantPayment() {
+  if (paymentInFlight) return;
+  paymentInFlight = true;
+  const btn = document.getElementById('confirm-payment-btn');
+  const originalBtnText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Processando...';
+  const errorEl = document.getElementById('payment-error');
+  errorEl.textContent = '';
+
+  const body = {
+    paymentMethod: payMethod,
+    variationIds: instantCheckoutContext.variationIds,
+    quantity: instantCheckoutContext.quantity,
+    neighborhood: instantCheckoutContext.neighborhood,
+    city: instantCheckoutContext.city,
+    state: instantCheckoutContext.state,
+    zipCode: instantCheckoutContext.zipCode || undefined,
+    description: instantCheckoutContext.description || undefined,
+  };
+  if (payMethod === 'credit_card') {
+    const [expMonth, expYear] = (document.getElementById('card-expiry').value || '').split('/');
+    body.card = {
+      number: document.getElementById('card-number').value.replace(/\s/g, ''),
+      holderName: document.getElementById('card-holder').value,
+      expMonth: parseInt(expMonth, 10),
+      expYear: parseInt(expYear, 10),
+      cvv: document.getElementById('card-cvv').value,
+    };
+    body.billingAddress = {
+      line1: instantCheckoutContext.neighborhood || user.street || 'Não informado',
+      zipCode: (document.getElementById('card-zip').value || '').replace(/\D/g, ''),
+      city: instantCheckoutContext.city || user.city || 'Não informado',
+      state: instantCheckoutContext.state || user.state || 'PR',
+    };
+  }
+
+  try {
+    const result = await api(`/services/${instantCheckoutContext.serviceId}/checkout`, { method: 'POST', body });
+    if (result.status === 'paid') {
+      trackConversionEvent('Purchase', { value: instantCheckoutContext.price, currency: 'BRL' });
+    }
+    if (instantCheckoutContext.city && instantCheckoutContext.state) setSelectedCityState(instantCheckoutContext.city, instantCheckoutContext.state);
+    instantCheckoutMode = false;
+    paymentInFlight = false;
+    showInstantSearchingScreen(result);
+  } catch (err) {
+    errorEl.textContent = err.message;
+    btn.disabled = false;
+    btn.textContent = originalBtnText;
+    paymentInFlight = false;
+  }
+}
+
+function showInstantSearchingScreen(result) {
+  instantSearchingRequestId = result.requestId;
+  const pixPending = payMethod === 'pix' && !!result.qrCodeUrl;
+  document.getElementById('instant-searching-title').textContent = pixPending ? '⚠️ Falta pagar o Pix!' : 'Buscando profissional...';
+  document.getElementById('instant-searching-icon').textContent = pixPending ? '⚠️' : '🔎';
+  document.getElementById('instant-searching-sub').textContent = pixPending
+    ? 'O pedido só entra na busca por profissional depois que você pagar. Escaneie o QR Code ou copie o código Pix abaixo agora.'
+    : 'Pagamento confirmado! Estamos buscando um profissional disponível para você. Você não precisa permanecer nesta tela.';
+  document.getElementById('instant-searching-service').textContent = instantCheckoutContext.serviceLabel;
+  document.getElementById('instant-searching-value').textContent = money(instantCheckoutContext.price);
+  document.getElementById('instant-searching-pix').innerHTML = pixPending
+    ? `<div class="fee-note" style="background:var(--danger-tint);color:var(--danger);font-weight:700;"><span>⚠️</span><span>Isso ainda não confirmou o pedido — pague o Pix abaixo pra começarmos a buscar um profissional.</span></div>${pixQrBoxHTML(result.qrCodeUrl, result.pixCopyPaste)}`
+    : '';
+  showScreen('instant-searching');
+}
+
+async function renderInstantSearchingScreen(r) {
+  instantSearchingRequestId = r.id;
+  let tx = null;
+  try { tx = await api(`/requests/${r.id}/transaction`); } catch { /* ainda sem transação visível */ }
+  const pixPending = tx && tx.status === 'pending' && tx.payment_method === 'pix';
+  document.getElementById('instant-searching-title').textContent = pixPending ? '⚠️ Falta pagar o Pix!' : 'Buscando profissional...';
+  document.getElementById('instant-searching-icon').textContent = pixPending ? '⚠️' : '🔎';
+  document.getElementById('instant-searching-sub').textContent = pixPending
+    ? 'Seu pagamento Pix ainda não foi confirmado. Verifique no app do seu banco — se já pagou, aguarde alguns instantes ou fale com o suporte.'
+    : 'Pagamento confirmado! Estamos buscando um profissional disponível para você. Você não precisa permanecer nesta tela.';
+  document.getElementById('instant-searching-service').textContent = r.service_name;
+  document.getElementById('instant-searching-value').textContent = money(r.value);
+  document.getElementById('instant-searching-pix').innerHTML = '';
+}
+
+let instantSearchingPollTimer = null;
+let instantSearchingRequestId = null;
+
+function startInstantSearchingPoll() {
+  stopInstantSearchingPoll();
+  instantSearchingPollTimer = setInterval(async () => {
+    if (!instantSearchingRequestId) return;
+    try {
+      const r = await api(`/requests/${instantSearchingRequestId}`);
+      if (['accepted', 'in_progress', 'awaiting_approval', 'done'].includes(r.status)) {
+        stopInstantSearchingPoll();
+        await renderConfirmFromRequest(r);
+        showScreen('confirm');
+      } else if (r.status === 'canceled') {
+        stopInstantSearchingPoll();
+        setTab('my-requests');
+      }
+    } catch { /* falha pontual de rede — tenta de novo no próximo tick */ }
+  }, 8000);
+}
+function stopInstantSearchingPoll() {
+  if (instantSearchingPollTimer) { clearInterval(instantSearchingPollTimer); instantSearchingPollTimer = null; }
+}
+
 function statusPillHTML(status) {
   return `<span class="pill ${status}">${statusLabels[status] || status}</span>`;
 }
@@ -1352,11 +1707,18 @@ async function openNotifications() {
   const data = await api('/notifications');
   const el = document.getElementById('notifications-list');
   el.innerHTML = data.notifications.length ? data.notifications.map((n) => `
-    <div class="list-item" onclick="markNotificationRead('${n.id}')" style="cursor:pointer;${n.read_at ? '' : 'background:var(--primary-tint);border-radius:12px;'}">
+    <div class="list-item" onclick="openNotification('${n.id}','${n.type}')" style="cursor:pointer;${n.read_at ? '' : 'background:var(--primary-tint);border-radius:12px;'}">
       <div class="icon" style="background:var(--primary-tint);color:var(--primary-dark);">🔔</div>
       <div class="txt"><strong>${n.title}</strong><span>${n.body || ''}</span></div>
     </div>
   `).join('') : '<div class="empty-state"><span class="glyph">🔔</span><p>Nenhuma notificação por aqui ainda.</p></div>';
+}
+
+// Notificação de oportunidade de preço fechado leva direto pra tela de
+// aceite — nas outras, só marca como lida (comportamento de sempre).
+function openNotification(id, type) {
+  markNotificationRead(id);
+  if (type === 'instant_order_offer' && user.role === 'provider') showScreen('instant-offers');
 }
 
 async function markNotificationRead(id) {
@@ -1552,6 +1914,10 @@ async function autoFillCep(value, context) {
     document.getElementById('req-neighborhood').value = data.neighborhood;
     document.getElementById('req-city').value = data.city;
     document.getElementById('req-state').value = data.state;
+  } else if (context === 'instant-checkout') {
+    document.getElementById('instant-addr-neighborhood').value = data.neighborhood;
+    document.getElementById('instant-addr-city').value = data.city;
+    document.getElementById('instant-addr-state').value = data.state;
   }
 }
 
@@ -1560,7 +1926,7 @@ let myRequestsFilter = 'all';
 const myRequestsFilterGroups = {
   all: () => true,
   pending: (r) => r.status === 'pending',
-  progress: (r) => ['accepted', 'in_progress', 'awaiting_approval'].includes(r.status),
+  progress: (r) => ['searching', 'accepted', 'in_progress', 'awaiting_approval'].includes(r.status),
   done: (r) => r.status === 'done',
 };
 
@@ -1612,6 +1978,9 @@ async function openMyRequest(requestId) {
   const r = await api(`/requests/${requestId}`);
   if (r.status === 'pending') {
     openProposalsScreen(r);
+  } else if (r.status === 'searching') {
+    await renderInstantSearchingScreen(r);
+    showScreen('instant-searching');
   } else if (r.status === 'awaiting_approval' || r.status === 'accepted' || r.status === 'in_progress' || r.status === 'done') {
     await renderConfirmFromRequest(r);
     showScreen('confirm');
@@ -1883,6 +2252,8 @@ async function acceptProposal(btn, requestId, proposalId, providerName, value) {
 // de detalhes do pedido — um pedido aceito mas ainda não pago (ex: cliente
 // saiu da tela antes de pagar) precisa de um jeito de voltar pro pagamento.
 function goToPaymentScreen(updated, providerName) {
+  instantCheckoutMode = false;
+  document.getElementById('pay-coupon-section').style.display = 'block';
   document.getElementById('pay-total').textContent = money(updated.value);
   document.getElementById('pay-details').textContent = `${updated.service_name} · ${providerName}`;
   currentChat = { requestId: updated.id, otherName: providerName, otherId: updated.provider_id, address: updated.address };
@@ -2005,6 +2376,7 @@ function copyPixCode() {
 let paymentInFlight = false;
 
 async function confirmPayment() {
+  if (instantCheckoutMode) return confirmInstantPayment();
   if (paymentInFlight) return; // trava contra duplo clique/toque — evita cobrar duas vezes
   paymentInFlight = true;
   const btn = document.getElementById('confirm-payment-btn');
@@ -2324,6 +2696,160 @@ async function loadOpenRequests() {
   loadProviderHomeBanners();
   loadVerificationBanner();
   loadSubscriptionPromoBanner();
+  refreshInstantOffersBanner();
+}
+
+// ---------- Oportunidades de preço fechado (despacho instantâneo) ----------
+// Terceira modalidade (ver serviceDispatch.js) — pedido já pago pelo cliente,
+// despachado pra todos os prestadores elegíveis de uma vez; o primeiro que
+// aceitar garante o serviço (aceite atômico no backend, ver instantServices.js).
+async function refreshInstantOffersBanner() {
+  const banner = document.getElementById('instant-offers-banner');
+  if (!banner) return;
+  try {
+    const offers = await api('/provider/offers/mine');
+    if (offers.length > 0) {
+      banner.style.display = 'flex';
+      document.getElementById('instant-offers-banner-title').textContent =
+        offers.length === 1 ? 'Você tem 1 nova oportunidade!' : `Você tem ${offers.length} novas oportunidades!`;
+    } else {
+      banner.style.display = 'none';
+    }
+  } catch { /* silencioso — não trava a home por causa disso */ }
+}
+
+function instantOfferCardHTML(o) {
+  const paymentLabel = o.paymentMethod === 'pix' ? 'Pix' : 'Cartão de crédito';
+  return `
+    <div class="req-card" style="cursor:default;">
+      <div class="row1"><span class="title">${esc(o.service_name)}</span></div>
+      <div class="meta-row">${esc(o.neighborhood || '')}${o.neighborhood ? ' · ' : ''}${esc(o.city)}/${esc(o.state)} · ${dateFmt(o.created_at)}</div>
+      <div class="summary-row"><span>Valor do serviço</span><span>${money(o.value)}</span></div>
+      <div class="summary-row"><span>Cliente pagou via</span><span>${paymentLabel}</span></div>
+      <div class="summary-row"><span>Taxa da plataforma (${parseFloat(o.feeRate).toFixed(0)}%)</span><span>- ${money(o.commissionValue)}</span></div>
+      ${o.gatewayFeeValue > 0 ? `<div class="summary-row"><span>Taxa de processamento (${paymentLabel.toLowerCase()})</span><span>- ${money(o.gatewayFeeValue)}</span></div>` : ''}
+      <div class="summary-row"><span>Você recebe</span><span style="color:var(--success);">${money(o.netValue)}</span></div>
+      <div style="display:flex;gap:10px;margin-top:10px;">
+        <button class="btn btn-ghost btn-small" style="flex:1;" onclick="declineInstantOffer('${o.target_id}', this)">Não tenho interesse</button>
+        <button class="btn btn-primary btn-small" style="flex:1;" onclick="acceptInstantOffer('${o.target_id}', this)">Aceitar agora</button>
+      </div>
+    </div>
+  `;
+}
+
+async function loadInstantOffers() {
+  const el = document.getElementById('instant-offers-list');
+  el.innerHTML = '<div class="empty-state" style="padding:40px 20px;"><p>Carregando...</p></div>';
+  const offers = await api('/provider/offers/mine');
+  el.innerHTML = offers.length
+    ? offers.map(instantOfferCardHTML).join('')
+    : '<div class="empty-state"><span class="glyph">⚡</span><p>Nenhuma oportunidade disponível no momento. Assim que surgir uma na sua categoria, avisamos você.</p></div>';
+}
+
+async function acceptInstantOffer(targetId, btn) {
+  if (btn.disabled) return;
+  btn.disabled = true;
+  const original = btn.textContent;
+  btn.textContent = 'Aceitando...';
+  try {
+    const result = await api(`/provider/offers/${targetId}/accept`, { method: 'POST' });
+    refreshInstantOffersBanner();
+    const r = await api(`/requests/${result.requestId}`);
+    await renderConfirmFromRequest(r);
+    showScreen('confirm');
+  } catch (err) {
+    alert(err.message);
+    btn.disabled = false;
+    btn.textContent = original;
+    loadInstantOffers();
+  }
+}
+
+async function declineInstantOffer(targetId, btn) {
+  if (btn.disabled) return;
+  btn.disabled = true;
+  try {
+    await api(`/provider/offers/${targetId}/decline`, { method: 'POST' });
+    loadInstantOffers();
+    refreshInstantOffersBanner();
+  } catch (err) {
+    alert(err.message);
+    btn.disabled = false;
+  }
+}
+
+// ---------- Preferências de oferta ("aceito oportunidades a partir de R$X") ----------
+async function loadOfferPreferencesScreen() {
+  const el = document.getElementById('offer-preferences-list');
+  el.innerHTML = '<div class="empty-state" style="padding:40px 20px;"><p>Carregando...</p></div>';
+  const [mine, prefs] = await Promise.all([
+    api('/provider/categories/mine'),
+    api('/provider/offer-preferences/mine'),
+  ]);
+  const prefsByCategory = Object.fromEntries(prefs.map((p) => [p.category, p.min_accept_value]));
+  el.innerHTML = (mine.categories || []).length
+    ? mine.categories.map((cat) => `
+      <div class="field" style="display:flex;align-items:center;gap:10px;">
+        <label style="flex:1;margin:0;">${esc(cat)}</label>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <span style="font-size:13px;color:var(--ink-soft);">R$</span>
+          <input type="text" inputmode="decimal" style="width:90px;" placeholder="Todas" value="${prefsByCategory[cat] != null ? parseFloat(prefsByCategory[cat]).toFixed(2).replace('.', ',') : ''}"
+            onchange="saveOfferPreferenceInput('${cat.replace(/'/g, "\\'")}', this)">
+        </div>
+      </div>
+    `).join('')
+    : '<div class="empty-state"><span class="glyph">🏷️</span><p>Cadastre suas categorias de atendimento primeiro.</p></div>';
+}
+
+async function saveOfferPreferenceInput(category, inputEl) {
+  const raw = inputEl.value.trim();
+  const minAcceptValue = raw ? parseFloat(raw.replace(/\./g, '').replace(',', '.')) : null;
+  try {
+    await api('/provider/offer-preferences', { method: 'PUT', body: { category, minAcceptValue } });
+  } catch (err) {
+    alert(err.message);
+  }
+}
+
+// ---------- Transparência de comissão na proposta (orçamento livre) ----------
+let providerFeeRateCache = null;
+
+async function ensureProviderFeeRate() {
+  if (providerFeeRateCache != null) return providerFeeRateCache;
+  try {
+    const result = await api('/provider/fee-rate');
+    providerFeeRateCache = result.feeRate;
+  } catch { providerFeeRateCache = null; }
+  return providerFeeRateCache;
+}
+
+// Taxas fixas conhecidas (Pix 1,19% + antecipação automática 1,6% no à
+// vista — mesmas constantes do backend, ver src/config/anticipation.js) e uma
+// estimativa pública pra taxa de cartão (a taxa real vem do gateway na hora
+// do pagamento, essa aqui é só pra dar uma ideia antes do cliente pagar).
+const PROPOSAL_PIX_FEE_RATE = 0.0119;
+const PROPOSAL_ESTIMATED_CARD_FEE_RATE = 0.0349;
+
+async function updateProposalCommissionPreview() {
+  const preview = document.getElementById('proposal-commission-preview');
+  const value = parseMoneyInput(document.getElementById('proposal-value').value);
+  if (!value || value <= 0) { preview.style.display = 'none'; return; }
+  const feeRate = await ensureProviderFeeRate();
+  if (feeRate == null) { preview.style.display = 'none'; return; }
+  const commissionValue = Math.round(value * (feeRate / 100) * 100) / 100;
+  const afterCommission = value - commissionValue;
+
+  const cardFee = Math.round(value * (PROPOSAL_ESTIMATED_CARD_FEE_RATE + ANTICIPATION_RATE_MONTHLY) * 100) / 100;
+  const pixFee = Math.round(value * PROPOSAL_PIX_FEE_RATE * 100) / 100;
+
+  document.getElementById('proposal-commission-value').textContent = money(value);
+  document.getElementById('proposal-commission-rate-label').textContent = `Taxa da plataforma (${feeRate}%)`;
+  document.getElementById('proposal-commission-fee').textContent = `- ${money(commissionValue)}`;
+  document.getElementById('proposal-commission-card-fee').textContent = `- ${money(cardFee)}`;
+  document.getElementById('proposal-commission-net-card').textContent = money(Math.round((afterCommission - cardFee) * 100) / 100);
+  document.getElementById('proposal-commission-pix-fee').textContent = `- ${money(pixFee)}`;
+  document.getElementById('proposal-commission-net-pix').textContent = money(Math.round((afterCommission - pixFee) * 100) / 100);
+  preview.style.display = 'block';
 }
 
 // Chama atenção pra assinatura na home do prestador — só mostra pra quem
@@ -2720,6 +3246,7 @@ function openSubmitProposal(requestId, serviceName, category, clientId, clientNa
   document.getElementById('submit-proposal-summary').innerHTML = `<div class="row1"><span class="title">${serviceName}</span></div><div class="meta-row">${category}</div>`;
   document.getElementById('proposal-value').value = '';
   document.getElementById('proposal-notes').value = '';
+  document.getElementById('proposal-commission-preview').style.display = 'none';
   const availabilityInput = document.getElementById('proposal-availability');
   availabilityInput.value = '';
   availabilityInput.min = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16);
@@ -2737,6 +3264,7 @@ function openEditProposal(proposalId, requestId, serviceName, category, currentV
   document.getElementById('submit-proposal-btn').textContent = 'Salvar e reenviar ao cliente';
   document.getElementById('submit-proposal-summary').innerHTML = `<div class="row1"><span class="title">${serviceName}</span></div><div class="meta-row">${category}</div>`;
   setMoneyInputValue(document.getElementById('proposal-value'), Number(currentValue));
+  updateProposalCommissionPreview();
   document.getElementById('proposal-notes').value = currentNotes || '';
   const availabilityInput = document.getElementById('proposal-availability');
   availabilityInput.value = '';
@@ -3674,6 +4202,11 @@ showScreen = function (id) {
   if (id === 'provider-categories') loadProviderCategoriesScreen();
   if (id === 'provider-installments') loadProviderInstallmentsScreen();
   if (id === 'provider-portfolio') loadProviderPortfolioScreen();
+  if (id === 'instant-services') renderInstantServicesScreen();
+  if (id === 'instant-searching') startInstantSearchingPoll();
+  else stopInstantSearchingPoll();
+  if (id === 'instant-offers') loadInstantOffers();
+  if (id === 'provider-offer-preferences') loadOfferPreferencesScreen();
 };
 
 // ---------- Fotos de trabalhos realizados (portfólio do prestador) ----------

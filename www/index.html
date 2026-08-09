@@ -9,7 +9,7 @@
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#22C55E">
 <link rel="apple-touch-icon" href="icon-192.png">
-<link rel="stylesheet" href="style.css?v=20260808a">
+<link rel="stylesheet" href="style.css?v=20260809f">
 </head>
 <body>
 
@@ -264,6 +264,11 @@
         </div>
       </div>
 
+      <div id="home-instant-services-section" style="display:none;">
+        <div class="section-title" style="margin-top:0;"><h3>Serviços com preço fechado <span class="badge-instant">Contrate na hora!</span></h3><span class="see-all" onclick="openInstantServicesScreen()">Ver todos <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 18l6-6-6-6"/></svg></span></div>
+        <div class="svc-scroll" id="home-instant-services"></div>
+      </div>
+
       <div id="home-banner-top"></div>
 
       <div class="section-title"><h3>Categorias</h3><span class="see-all" onclick="openSearchScreen()">Ver todas <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 18l6-6-6-6"/></svg></span></div>
@@ -389,6 +394,122 @@
     </div>
   </section>
 
+  <!-- SERVIÇOS COM PREÇO FECHADO — VER TODOS -->
+  <section class="screen" data-screen="instant-services">
+    <div class="back-row">
+      <button class="back-btn" onclick="showScreen(homeScreenId())">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <h2>Preço fechado</h2>
+    </div>
+    <div style="padding:14px 20px 0;">
+      <div class="search-filter-row">
+        <div class="search-box">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--ink-faint)" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3-3"/></svg>
+          <input type="text" id="instant-services-search" placeholder="Buscar serviço..." oninput="filterInstantServices(this.value)">
+        </div>
+      </div>
+      <div class="filter-tabs" id="instant-services-category-tabs"></div>
+    </div>
+    <div class="screen-scroll">
+      <div class="svc-grid" id="instant-services-list"></div>
+    </div>
+  </section>
+
+  <!-- SERVIÇOS COM PREÇO FECHADO — DETALHE -->
+  <section class="screen" data-screen="instant-service-detail">
+    <div class="back-row">
+      <button class="back-btn" onclick="showScreen('instant-services')">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <h2 id="instant-detail-header">Serviço</h2>
+    </div>
+    <div class="screen-scroll">
+      <div id="instant-detail-image-wrap" style="display:none;"><img id="instant-detail-image" style="width:100%;border-radius:14px;display:block;margin-bottom:14px;" loading="lazy"></div>
+      <div style="font-size:11.5px;color:var(--primary);font-weight:700;text-transform:uppercase;letter-spacing:.03em;" id="instant-detail-category"></div>
+      <h2 style="margin:4px 0 6px;" id="instant-detail-name"></h2>
+      <p style="font-size:13px;color:var(--ink-soft);" id="instant-detail-short"></p>
+      <div class="pay-summary" style="margin:14px 0;">
+        <div class="pay-total-label">Valor</div>
+        <div class="pay-total" id="instant-detail-price">R$ 0,00</div>
+        <div style="font-size:12px;color:var(--ink-soft);margin-top:2px;display:none;" id="instant-detail-unit-price"></div>
+        <div style="font-size:12px;color:var(--ink-soft);margin-top:6px;" id="instant-detail-duration"></div>
+      </div>
+      <div id="instant-detail-variations-field" class="field" style="display:none;">
+        <label>Selecione um ou mais (mínimo 1)</label>
+        <div class="chip-select" id="instant-detail-variations"></div>
+      </div>
+      <div class="field">
+        <label>Quantidade</label>
+        <div class="qty-stepper">
+          <button type="button" onclick="decrementInstantQuantity()">−</button>
+          <span id="instant-detail-quantity">1</span>
+          <button type="button" onclick="incrementInstantQuantity()">+</button>
+        </div>
+      </div>
+      <p style="font-size:13.5px;white-space:pre-line;" id="instant-detail-description"></p>
+      <div id="instant-detail-included-wrap" style="display:none;">
+        <div class="section-title" style="margin:16px 0 8px;"><h3 style="font-size:14px;">O que está incluso</h3></div>
+        <ul class="check-list" id="instant-detail-included"></ul>
+      </div>
+      <div id="instant-detail-excluded-wrap" style="display:none;">
+        <div class="section-title" style="margin:16px 0 8px;"><h3 style="font-size:14px;">O que não está incluso</h3></div>
+        <ul class="check-list excluded" id="instant-detail-excluded"></ul>
+      </div>
+      <button class="btn btn-primary btn-block" style="margin-top:18px;" onclick="startInstantCheckout()">Contratar agora</button>
+      <p style="text-align:center;font-size:11px;color:var(--ink-faint);margin-top:10px;">Pagamento seguro pela NEXSERV. Buscamos um profissional disponível pra você assim que o pagamento for confirmado.</p>
+    </div>
+  </section>
+
+  <!-- SERVIÇOS COM PREÇO FECHADO — ENDEREÇO/OBSERVAÇÕES -->
+  <section class="screen" data-screen="instant-checkout-address">
+    <div class="back-row">
+      <button class="back-btn" onclick="showScreen('instant-service-detail')">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <h2>Onde é o serviço?</h2>
+    </div>
+    <div class="screen-scroll">
+      <div class="pay-summary" style="margin-bottom:16px;">
+        <div class="pay-total-label" id="instant-addr-service-name"></div>
+        <div class="pay-total" id="instant-addr-price">R$ 0,00</div>
+      </div>
+      <div class="field"><label>CEP</label><input id="instant-addr-zip" placeholder="00000000" oninput="autoFillCep(this.value, 'instant-checkout')"></div>
+      <div style="display:flex;gap:10px;">
+        <div class="field" style="flex:1;"><label>Bairro</label><input id="instant-addr-neighborhood"></div>
+        <div class="field" style="flex:1;"><label>Cidade</label><input id="instant-addr-city"></div>
+      </div>
+      <input type="hidden" id="instant-addr-state">
+      <div class="field"><label>Observações (opcional)</label><textarea id="instant-addr-description" rows="4" placeholder="Ex: apartamento 302, portão azul, tem cachorro..."></textarea></div>
+      <button class="btn btn-primary btn-block" onclick="goToInstantPaymentScreen()">Continuar para pagamento</button>
+      <div class="error-msg" id="instant-addr-error"></div>
+      <p style="text-align:center;font-size:11px;color:var(--ink-faint);margin-top:12px;">O endereço completo (rua e número) você informa depois que um profissional aceitar o serviço.</p>
+    </div>
+  </section>
+
+  <!-- SERVIÇOS COM PREÇO FECHADO — BUSCANDO PROFISSIONAL -->
+  <section class="screen" data-screen="instant-searching">
+    <div class="back-row">
+      <button class="back-btn" onclick="setTab('my-requests')">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+    </div>
+    <div class="screen-scroll">
+      <div class="confirm-hero">
+        <div class="confirm-check" id="instant-searching-icon">🔎</div>
+        <h2 id="instant-searching-title">Buscando profissional...</h2>
+        <p id="instant-searching-sub">Pagamento confirmado! Estamos buscando um profissional disponível para você.</p>
+      </div>
+      <div class="summary-list">
+        <div class="summary-row"><span>Serviço</span><span id="instant-searching-service"></span></div>
+        <div class="summary-row"><span>Valor</span><span id="instant-searching-value"></span></div>
+      </div>
+      <div id="instant-searching-pix"></div>
+      <p style="text-align:center;font-size:12px;color:var(--ink-faint);margin-top:16px;">Você não precisa permanecer nesta tela — vamos te avisar por notificação, e-mail e WhatsApp assim que um profissional aceitar.</p>
+      <button class="btn btn-ghost btn-block" style="margin-top:14px;" onclick="setTab('my-requests')">Ver minhas solicitações</button>
+    </div>
+  </section>
+
   <!-- PROPOSTAS -->
   <section class="screen" data-screen="proposals">
     <div class="back-row">
@@ -432,12 +553,14 @@
         <div id="pay-credit-row" style="display:none;font-size:13px;color:var(--success);font-weight:700;margin-top:8px;"></div>
       </div>
 
-      <div class="section-title"><h3>Cupom de desconto</h3></div>
-      <div style="display:flex;gap:8px;margin-bottom:6px;">
-        <input id="coupon-input" placeholder="Código do cupom" style="flex:1;border:1.5px solid var(--line);background:var(--card);border-radius:11px;padding:12px 14px;font-family:inherit;font-size:16px;text-transform:uppercase;">
-        <button class="btn btn-ghost" onclick="applyCoupon()">Aplicar</button>
+      <div id="pay-coupon-section">
+        <div class="section-title"><h3>Cupom de desconto</h3></div>
+        <div style="display:flex;gap:8px;margin-bottom:6px;">
+          <input id="coupon-input" placeholder="Código do cupom" style="flex:1;border:1.5px solid var(--line);background:var(--card);border-radius:11px;padding:12px 14px;font-family:inherit;font-size:16px;text-transform:uppercase;">
+          <button class="btn btn-ghost" onclick="applyCoupon()">Aplicar</button>
+        </div>
+        <div class="error-msg" id="coupon-error" style="margin-top:0;margin-bottom:14px;"></div>
       </div>
-      <div class="error-msg" id="coupon-error" style="margin-top:0;margin-bottom:14px;"></div>
 
       <div class="section-title"><h3>Forma de pagamento</h3></div>
       <div class="pay-method selected" data-method="pix" onclick="selectPayMethod(this)">
@@ -571,6 +694,14 @@
       <div id="verification-banner"></div>
       <div id="subscription-promo-banner"></div>
       <div id="provider-banner-top"></div>
+      <div id="instant-offers-banner" class="pro-promo-banner" style="display:none;cursor:pointer;" onclick="showScreen('instant-offers')">
+        <div class="icon">⚡</div>
+        <div class="txt">
+          <strong id="instant-offers-banner-title">Você tem novas oportunidades!</strong>
+          <span>Serviços com preço fechado — o primeiro que aceitar garante o trabalho.</span>
+          <button type="button">Ver oportunidades</button>
+        </div>
+      </div>
       <div class="section-title"><h3>Pedidos disponíveis</h3></div>
       <div id="open-requests-list"></div>
       <div id="provider-banner-bottom"></div>
@@ -591,8 +722,17 @@
       <button class="btn btn-ghost btn-block" id="proposal-ask-question-btn" style="display:none;margin-bottom:14px;" onclick="askClientQuestionFromProposal()">💬 Tirar dúvida com o cliente antes de orçar</button>
       <div class="field">
         <label>Seu valor (R$)</label>
-        <input type="text" inputmode="decimal" id="proposal-value" placeholder="0,00" oninput="formatMoneyInput(this)">
+        <input type="text" inputmode="decimal" id="proposal-value" placeholder="0,00" oninput="formatMoneyInput(this); updateProposalCommissionPreview();">
         <p style="font-size:11.5px;color:var(--ink-faint);margin:4px 0 0;">Valor mínimo de R$ 100,00 por proposta.</p>
+      </div>
+      <div class="req-card" style="cursor:default;display:none;" id="proposal-commission-preview">
+        <div class="summary-row"><span>Valor da proposta</span><span id="proposal-commission-value">R$ 0,00</span></div>
+        <div class="summary-row"><span id="proposal-commission-rate-label">Taxa da plataforma</span><span id="proposal-commission-fee">- R$ 0,00</span></div>
+        <p style="font-size:11px;color:var(--ink-faint);margin:8px 0 2px;">Se o cliente pagar no...</p>
+        <div class="summary-row"><span>Cartão de crédito (taxa estimada)</span><span id="proposal-commission-card-fee">- R$ 0,00</span></div>
+        <div class="summary-row"><span>→ Você recebe</span><span id="proposal-commission-net-card" style="color:var(--success);">R$ 0,00</span></div>
+        <div class="summary-row"><span>Pix (taxa 1,19%)</span><span id="proposal-commission-pix-fee">- R$ 0,00</span></div>
+        <div class="summary-row"><span>→ Você recebe</span><span id="proposal-commission-net-pix" style="color:var(--success);">R$ 0,00</span></div>
       </div>
       <div class="field">
         <label>Disponibilidade</label>
@@ -607,6 +747,35 @@
       <div class="field"><label>Observação (opcional)</label><textarea id="proposal-notes" rows="3" placeholder="Alguma informação extra sobre o orçamento?"></textarea></div>
       <button class="btn btn-primary btn-block" id="submit-proposal-btn" onclick="submitProposal()">Enviar proposta</button>
       <div class="error-msg" id="submit-proposal-error"></div>
+    </div>
+  </section>
+
+  <!-- OFERTAS INSTANTÂNEAS (PREÇO FECHADO) -->
+  <section class="screen" data-screen="instant-offers">
+    <div class="back-row">
+      <button class="back-btn" onclick="setTab('provider-home')">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <h2>Oportunidades</h2>
+      <span class="link-btn" style="margin-left:auto;" onclick="showScreen('provider-offer-preferences')">Preferências</span>
+    </div>
+    <div class="screen-scroll">
+      <p style="font-size:12.5px;color:var(--ink-soft);margin-top:0;">Serviços com preço fechado já pagos pelo cliente — é só aceitar. O primeiro prestador que aceitar garante o serviço.</p>
+      <div id="instant-offers-list"></div>
+    </div>
+  </section>
+
+  <!-- PREFERÊNCIAS DE OFERTA (VALOR MÍNIMO POR CATEGORIA) -->
+  <section class="screen" data-screen="provider-offer-preferences">
+    <div class="back-row">
+      <button class="back-btn" onclick="showScreen('instant-offers')">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <h2>Preferências de oferta</h2>
+    </div>
+    <div class="screen-scroll">
+      <p style="font-size:12.5px;color:var(--ink-soft);margin-top:0;">Defina um valor mínimo por categoria — só te avisamos de oportunidades de preço fechado a partir desse valor. Deixe em branco pra receber todas.</p>
+      <div id="offer-preferences-list"></div>
     </div>
   </section>
 
@@ -1526,7 +1695,7 @@
 </div>
 
 <script src="config.js"></script>
-<script src="app.js?v=20260809b"></script>
+<script src="app.js?v=20260809i"></script>
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => navigator.serviceWorker.register('sw.js'));
