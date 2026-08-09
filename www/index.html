@@ -2,14 +2,14 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>NEXSERV — Entrar ou cadastrar</title>
 <meta name="description" content="Entre na sua conta NEXSERV ou cadastre-se como cliente ou prestador de serviços.">
 <link rel="icon" type="image/png" href="logo-icon.png">
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#22C55E">
 <link rel="apple-touch-icon" href="icon-192.png">
-<link rel="stylesheet" href="style.css?v=20260809f">
+<link rel="stylesheet" href="style.css?v=20260809g">
 </head>
 <body>
 
@@ -436,8 +436,11 @@
         <div style="font-size:12px;color:var(--ink-soft);margin-top:6px;" id="instant-detail-duration"></div>
       </div>
       <div id="instant-detail-variations-field" class="field" style="display:none;">
-        <label>Selecione um ou mais (mínimo 1)</label>
+        <label id="instant-detail-variations-label">Selecione um ou mais (mínimo 1)</label>
         <div class="chip-select" id="instant-detail-variations"></div>
+        <p id="instant-detail-variations-fallback" style="display:none;font-size:12.5px;margin-top:6px;">
+          Não sabe qual opção escolher? <span class="link-btn" style="font-size:12.5px;" onclick="preferOrcamentoForInstantService()">Prefiro pedir orçamento</span>
+        </p>
       </div>
       <div class="field">
         <label>Quantidade</label>
@@ -1695,7 +1698,7 @@
 </div>
 
 <script src="config.js"></script>
-<script src="app.js?v=20260809i"></script>
+<script src="app.js?v=20260809l"></script>
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => navigator.serviceWorker.register('sw.js'));

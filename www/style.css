@@ -32,6 +32,10 @@ body{
   color:var(--ink);
   height:100%;
   overflow:hidden;
+  /* Sem isso, dois toques rápidos em qualquer card/botão (comum quando a
+     tela demora a responder) o navegador/WebView interpreta como gesto de
+     zoom — mantém o app com cara de app, não de página que dá pra zoom. */
+  touch-action:manipulation;
 }
 h1,h2,h3,h4{margin:0;font-weight:700;letter-spacing:-.01em;}
 

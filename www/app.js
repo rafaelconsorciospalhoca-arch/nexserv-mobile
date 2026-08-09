@@ -1326,7 +1326,8 @@ async function loadFeaturedProviders() {
 // primeiro que aceitar garante o serviço (ver src/routes/instantServices.js
 // e src/services/serviceDispatch.js).
 function svcCardHTML(s) {
-  const price = s.display_price != null ? money(s.display_price) : 'Sob consulta';
+  const hasVariations = s.variation_count > 0;
+  const price = s.display_price != null ? `${hasVariations ? 'A partir de ' : ''}${money(s.display_price)}` : 'Sob consulta';
   return `
     <div class="svc-card" onclick="openInstantServiceDetail('${s.id}')">
       <div class="svc-photo">
@@ -1334,7 +1335,7 @@ function svcCardHTML(s) {
       </div>
       <div class="svc-body">
         <div class="svc-name">${esc(s.name)}</div>
-        <div class="svc-price">${price}${s.variation_count > 0 ? ' +' : ''}</div>
+        <div class="svc-price">${price}</div>
         <div class="svc-cat">${esc(s.category)}</div>
       </div>
     </div>
@@ -1342,6 +1343,7 @@ function svcCardHTML(s) {
 }
 
 function renderHomeInstantServices(list) {
+  list.forEach((s) => { instantServicesById[s.id] = s; });
   const section = document.getElementById('home-instant-services-section');
   if (!list.length) { section.style.display = 'none'; return; }
   section.style.display = 'block';
@@ -1364,6 +1366,7 @@ async function renderInstantServicesScreen() {
   document.getElementById('instant-services-search').value = '';
   document.getElementById('instant-services-list').innerHTML = '<div class="empty-state" style="grid-column:1/-1;padding:40px 20px;"><p>Carregando...</p></div>';
   instantServicesAll = await api('/services');
+  instantServicesAll.forEach((s) => { instantServicesById[s.id] = s; });
   instantServicesCategory = 'Todos';
   const categories = ['Todos', ...new Set(instantServicesAll.flatMap((s) => s.categories && s.categories.length ? s.categories : [s.category]))];
   document.getElementById('instant-services-category-tabs').innerHTML = categories.map((c) => `
@@ -1397,16 +1400,30 @@ let instantDetailService = null;
 let instantDetailSelectedVariationIds = new Set();
 let instantDetailQuantity = 1;
 
+let instantDetailOpenToken = 0;
+let instantServicesById = {};
+
 async function openInstantServiceDetail(id) {
+  // Mostra a tela IMEDIATAMENTE (com o que já se tem em cache do card, se
+  // tiver) em vez de esperar a resposta da rede pra trocar de tela — antes
+  // disso a tela ficava parada uns instantes e dava a impressão de travado
+  // (levando a cliques duplos, que no navegador viram gesto de zoom).
+  const token = ++instantDetailOpenToken;
+  const cachedSummary = instantServicesById[id];
+  instantDetailService = cachedSummary ? { ...cachedSummary, variations: [] } : { id, name: 'Carregando...', variations: [] };
+  instantDetailSelectedVariationIds = new Set();
+  instantDetailQuantity = 1;
+  renderInstantServiceDetail();
+  showScreen('instant-service-detail');
+
   const s = await api(`/services/${id}`);
+  if (token !== instantDetailOpenToken) return; // usuário já saiu/abriu outro nesse meio tempo
   instantDetailService = s;
   // Primeira variação vem pré-selecionada — mínimo 1 sempre (ver
   // toggleInstantVariation), cliente pode marcar mais de uma pra somar
   // (ex: "Montagem" + "Desmontagem" de móveis).
   instantDetailSelectedVariationIds = new Set(s.variations && s.variations.length ? [s.variations[0].id] : []);
-  instantDetailQuantity = 1;
   renderInstantServiceDetail();
-  showScreen('instant-service-detail');
 }
 
 function selectedInstantVariations() {
@@ -1444,7 +1461,10 @@ function renderInstantServiceDetail() {
 
   const variationsField = document.getElementById('instant-detail-variations-field');
   if (s.variations && s.variations.length) {
+    const isSingle = s.variation_selection_mode === 'single';
     variationsField.style.display = 'block';
+    document.getElementById('instant-detail-variations-label').textContent = isSingle ? 'Escolha uma opção' : 'Selecione um ou mais (mínimo 1)';
+    document.getElementById('instant-detail-variations-fallback').style.display = isSingle ? 'block' : 'none';
     document.getElementById('instant-detail-variations').innerHTML = s.variations.map((v) => `
       <button type="button" class="chip-opt ${instantDetailSelectedVariationIds.has(v.id) ? 'selected' : ''}" onclick="toggleInstantVariation('${v.id}')">${esc(v.name)} — ${v.display_price != null ? money(v.display_price) : 'sob consulta'}</button>
     `).join('');
@@ -1481,14 +1501,26 @@ function renderInstantServiceDetail() {
 }
 
 function toggleInstantVariation(variationId) {
-  if (instantDetailSelectedVariationIds.has(variationId)) {
-    // Mínimo 1 sempre selecionada — não deixa desmarcar a última.
+  // 'single' = alternativas (ex: BTUs do ar-condicionado) — escolhe só uma,
+  // clicar troca a seleção. 'multiple' = aditivas (ex: Montagem +
+  // Desmontagem) — soma quantas quiser, mínimo 1 sempre selecionada.
+  if (instantDetailService.variation_selection_mode === 'single') {
+    instantDetailSelectedVariationIds = new Set([variationId]);
+  } else if (instantDetailSelectedVariationIds.has(variationId)) {
     if (instantDetailSelectedVariationIds.size <= 1) return;
     instantDetailSelectedVariationIds.delete(variationId);
   } else {
     instantDetailSelectedVariationIds.add(variationId);
   }
   renderInstantServiceDetail();
+}
+
+// Pra quem não sabe qual opção de variação escolher (ex: BTUs do
+// ar-condicionado) — sai do fluxo de preço fechado e cai no orçamento normal,
+// onde o prestador vê fotos/descrição e decide o valor caso a caso.
+function preferOrcamentoForInstantService() {
+  const s = instantDetailService;
+  openRequestForm(s.category, s.name);
 }
 
 function startInstantCheckout() {
