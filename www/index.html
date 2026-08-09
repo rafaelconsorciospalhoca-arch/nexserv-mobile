@@ -272,7 +272,7 @@
       <div class="section-title"><h3>Como funciona?</h3></div>
       <div class="how-it-works-row" id="how-it-works-row"></div>
 
-      <div class="section-title"><h3>Profissionais em destaque</h3><span class="see-all" onclick="allProvidersCategory=null;showScreen('all-providers')">Ver todos <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 18l6-6-6-6"/></svg></span></div>
+      <div class="section-title"><h3>Profissionais em destaque</h3><span class="see-all" onclick="allProvidersCategory=null;allProvidersOnlyFixedPrice=false;showScreen('all-providers')">Ver todos <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 18l6-6-6-6"/></svg></span></div>
       <div class="pro-scroll" id="featured-providers"></div>
 
       <div id="home-banner-bottom"></div>
@@ -1171,6 +1171,7 @@
           <option value="price">Ordenar por menor preço</option>
         </select>
       </div>
+      <div id="all-providers-fallback-link" style="display:none;margin-bottom:12px;"></div>
       <div id="all-providers-list"></div>
     </div>
   </section>
@@ -1525,7 +1526,7 @@
 </div>
 
 <script src="config.js"></script>
-<script src="app.js?v=20260808g"></script>
+<script src="app.js?v=20260809b"></script>
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => navigator.serviceWorker.register('sw.js'));

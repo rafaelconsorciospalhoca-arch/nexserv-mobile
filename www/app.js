@@ -1389,7 +1389,21 @@ async function filterSearch(query) {
 }
 
 // ---------- Categoria / pedido ----------
-function openCategory(catName) {
+async function openCategory(catName) {
+  // Se a categoria tem preço fixo configurado por algum prestador, mostra a
+  // lista deles direto — só cai no formulário de orçamento se não tiver
+  // nenhum (ou se der erro na checagem, pra não travar o cliente).
+  if (FIXED_PRICE_CATEGORIES.includes(catName) || KM_RATE_CATEGORIES.includes(catName)) {
+    try {
+      const providers = await api(`/providers/directory/list?category=${encodeURIComponent(catName)}&onlyFixedPrice=true`);
+      if (providers.length > 0) {
+        allProvidersCategory = catName;
+        allProvidersOnlyFixedPrice = true;
+        showScreen('all-providers');
+        return;
+      }
+    } catch { /* segue pro orçamento normal */ }
+  }
   openRequestForm(catName, catName);
 }
 
@@ -3607,23 +3621,34 @@ async function renderFavoritesScreen() {
 
 // ---------- Todos os profissionais ----------
 let allProvidersCategory = null;
+let allProvidersOnlyFixedPrice = false;
 
 function viewProvidersForRequestCategory() {
   allProvidersCategory = requestDraft?.category || null;
+  allProvidersOnlyFixedPrice = true;
   showScreen('all-providers');
 }
 
 async function renderAllProvidersScreen() {
   const el = document.getElementById('all-providers-list');
   const sortWrap = document.getElementById('all-providers-sort-wrap');
+  const fallbackLink = document.getElementById('all-providers-fallback-link');
   document.getElementById('all-providers-title').textContent = allProvidersCategory || 'Profissionais';
   sortWrap.style.display = allProvidersCategory ? '' : 'none';
+  if (allProvidersOnlyFixedPrice && allProvidersCategory) {
+    fallbackLink.style.display = '';
+    fallbackLink.innerHTML = `<button class="btn btn-ghost btn-block btn-small" onclick="openRequestForm('${allProvidersCategory.replace(/'/g, "\\'")}','${allProvidersCategory.replace(/'/g, "\\'")}')">Prefiro pedir orçamento</button>`;
+  } else {
+    fallbackLink.style.display = 'none';
+    fallbackLink.innerHTML = '';
+  }
   const sort = allProvidersCategory ? document.getElementById('all-providers-sort').value : '';
   el.innerHTML = '<div class="empty-state" style="padding:40px 20px;"><p>Carregando...</p></div>';
-  const query = allProvidersCategory
-    ? `?category=${encodeURIComponent(allProvidersCategory)}${sort ? `&sort=${sort}` : ''}`
-    : '';
-  const providers = await api(`/providers/directory/list${query}`);
+  const params = new URLSearchParams();
+  if (allProvidersCategory) params.set('category', allProvidersCategory);
+  if (sort) params.set('sort', sort);
+  if (allProvidersOnlyFixedPrice) params.set('onlyFixedPrice', 'true');
+  const providers = await api(`/providers/directory/list?${params.toString()}`);
   el.innerHTML = providers.length ? `<div class="provider-grid">${providers.map((p) => `
     <div class="p-card" onclick="viewProviderProfile('${p.id}','all-providers')">
       <div class="p-photo"><img src="${avatarSrc(p)}" loading="lazy"></div>
@@ -3633,7 +3658,9 @@ async function renderAllProvidersScreen() {
       ${p.min_catalog_price != null ? `<div class="p-role" style="color:var(--primary);font-weight:700;">a partir de ${money(p.min_catalog_price)}</div>` : ''}
       ${p.has_km_rate ? `<div class="p-role" style="color:var(--primary);font-weight:700;">preço por km</div>` : ''}
     </div>
-  `).join('')}</div>` : '<div class="empty-state"><span class="glyph">🔍</span><p>Nenhum profissional cadastrado ainda.</p></div>';
+  `).join('')}</div>` : (allProvidersOnlyFixedPrice
+    ? '<div class="empty-state"><span class="glyph">🔍</span><p>Nenhum prestador com preço fixo nessa categoria ainda. Peça um orçamento normal, ou volte mais tarde.</p></div>'
+    : '<div class="empty-state"><span class="glyph">🔍</span><p>Nenhum profissional cadastrado ainda.</p></div>');
 }
 
 const _origShowScreen = showScreen;
