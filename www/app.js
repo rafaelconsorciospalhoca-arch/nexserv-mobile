@@ -1352,7 +1352,10 @@ function renderHomeInstantServices(list) {
 
 async function loadHomeInstantServices() {
   try {
-    const list = await api('/services?homeOnly=true');
+    const selectedCity = getSelectedCity();
+    const params = new URLSearchParams({ homeOnly: 'true' });
+    if (selectedCity.city) { params.set('city', selectedCity.city); if (selectedCity.state) params.set('state', selectedCity.state); }
+    const list = await api(`/services?${params.toString()}`);
     renderHomeInstantServices(list);
   } catch { /* recurso novo — se o cache antigo do app ainda não tiver essa rota, ignora */ }
 }
@@ -1365,7 +1368,10 @@ let instantServicesCategory = 'Todos';
 async function renderInstantServicesScreen() {
   document.getElementById('instant-services-search').value = '';
   document.getElementById('instant-services-list').innerHTML = '<div class="empty-state" style="grid-column:1/-1;padding:40px 20px;"><p>Carregando...</p></div>';
-  instantServicesAll = await api('/services');
+  const selectedCity = getSelectedCity();
+  const listParams = new URLSearchParams();
+  if (selectedCity.city) { listParams.set('city', selectedCity.city); if (selectedCity.state) listParams.set('state', selectedCity.state); }
+  instantServicesAll = await api(`/services?${listParams.toString()}`);
   instantServicesAll.forEach((s) => { instantServicesById[s.id] = s; });
   instantServicesCategory = 'Todos';
   const categories = ['Todos', ...new Set(instantServicesAll.flatMap((s) => s.categories && s.categories.length ? s.categories : [s.category]))];
