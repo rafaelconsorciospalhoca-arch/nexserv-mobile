@@ -13,6 +13,7 @@
     "@capacitor/core": "^8.4.1",
     "@capacitor/geolocation": "^8.2.1",
     "@capacitor/ios": "^8.4.1",
+    "@capacitor/status-bar": "^8.0.3",
     "firebase": "^12.17.1"
   },
   "devDependencies": {

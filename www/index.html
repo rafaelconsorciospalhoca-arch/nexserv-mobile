@@ -9,7 +9,20 @@
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#22C55E">
 <link rel="apple-touch-icon" href="icon-192.png">
-<link rel="stylesheet" href="style.css?v=20260809g">
+<link rel="stylesheet" href="style.css?v=20260810a">
+<script>
+// Tema tem que ser aplicado ANTES do CSS pintar a tela, senão o app abre claro
+// e pisca pro escuro (FOUC). Por isso é inline aqui no head, e não no app.js —
+// que só carrega no fim do body. Sem preferência salva, segue o sistema.
+(function () {
+  try {
+    var saved = localStorage.getItem('nexserv_theme');
+    var dark = saved ? saved === 'dark'
+      : window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    if (dark) document.documentElement.setAttribute('data-theme', 'dark');
+  } catch (e) { /* localStorage bloqueado (aba anônima) — segue no claro */ }
+})();
+</script>
 </head>
 <body>
 
@@ -1240,7 +1253,7 @@
       <span>🔒</span>
       <span>Combine o dia por aqui, mas priorize pagar pelo NEXSERV — seu dinheiro fica protegido até o serviço ser concluído.</span>
     </div>
-    <div id="chat-no-contact-notice" class="fee-note" style="display:none;margin:0 16px 10px;background:var(--warning-tint);color:#92400E;">
+    <div id="chat-no-contact-notice" class="fee-note" style="display:none;margin:0 16px 10px;background:var(--warning-tint);color:var(--warning-ink);">
       <span>⚠️</span>
       <span>Telefone, e-mail e CEP são removidos automaticamente e ficam registrados. Combinar contato fora do app pode gerar penalidade na conta.</span>
     </div>
@@ -1282,6 +1295,16 @@
       <div class="shortcut-grid" id="profile-shortcuts"></div>
 
       <div id="profile-extra"></div>
+
+      <div class="section-title"><h3>Aparência</h3></div>
+      <div class="list-item" style="cursor:default;">
+        <div class="icon" style="background:var(--paper);color:var(--ink-soft);" id="theme-icon">🌙</div>
+        <div class="txt"><strong>Modo escuro</strong><span id="theme-hint">Seguindo o tema do seu aparelho</span></div>
+        <label class="switch">
+          <input type="checkbox" id="theme-switch" onchange="setTheme(this.checked ? 'dark' : 'light')">
+          <span class="switch-track"></span>
+        </label>
+      </div>
 
       <div class="section-title"><h3>Suporte</h3></div>
       <div class="list-item" onclick="showScreen('help-center')">
@@ -1698,7 +1721,7 @@
 </div>
 
 <script src="config.js"></script>
-<script src="app.js?v=20260810a"></script>
+<script src="app.js?v=20260810b"></script>
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => navigator.serviceWorker.register('sw.js'));

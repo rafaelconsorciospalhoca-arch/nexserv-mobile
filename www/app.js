@@ -142,6 +142,65 @@ function trackScreen(id) {
   trackPath(`/app/tab/${id}`);
 }
 
+// ---------- tema (claro/escuro) ----------
+// A aplicação inicial acontece no <head> do index.html (script inline), pra não
+// piscar claro antes do CSS carregar. Aqui fica só o que precisa rodar depois:
+// trocar, salvar e manter a barra de status do sistema combinando.
+const THEME_KEY = 'nexserv_theme';
+
+function currentTheme() {
+  return document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+}
+
+// A cor da barra do navegador (e a nativa, no app Capacitor) não segue CSS —
+// tem que ser avisada na mão, senão fica verde clara sobre a tela escura.
+function syncSystemBars(theme) {
+  const barColor = theme === 'dark' ? '#0D1117' : '#22C55E';
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute('content', barColor);
+  const StatusBar = window.Capacitor?.Plugins?.StatusBar;
+  if (StatusBar) {
+    StatusBar.setStyle({ style: theme === 'dark' ? 'DARK' : 'LIGHT' }).catch(() => {});
+    StatusBar.setBackgroundColor({ color: barColor }).catch(() => {});
+  }
+}
+
+function setTheme(theme) {
+  if (theme === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
+  else document.documentElement.removeAttribute('data-theme');
+  try { localStorage.setItem(THEME_KEY, theme); } catch (e) { /* aba anônima */ }
+  syncSystemBars(theme);
+  updateThemeControl();
+}
+
+function updateThemeControl() {
+  const sw = document.getElementById('theme-switch');
+  if (!sw) return;
+  const dark = currentTheme() === 'dark';
+  sw.checked = dark;
+  document.getElementById('theme-icon').textContent = dark ? '🌙' : '☀️';
+  let saved = null;
+  try { saved = localStorage.getItem(THEME_KEY); } catch (e) { /* aba anônima */ }
+  document.getElementById('theme-hint').textContent = saved
+    ? (dark ? 'Ativado' : 'Desativado')
+    : 'Seguindo o tema do seu aparelho';
+}
+
+// Enquanto o usuário não escolher manualmente, o app acompanha o aparelho —
+// inclusive se ele trocar com o app aberto (agendamento noturno do Android/iOS).
+if (window.matchMedia) {
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+    let saved = null;
+    try { saved = localStorage.getItem(THEME_KEY); } catch (err) { /* aba anônima */ }
+    if (saved) return;
+    if (e.matches) document.documentElement.setAttribute('data-theme', 'dark');
+    else document.documentElement.removeAttribute('data-theme');
+    syncSystemBars(currentTheme());
+    updateThemeControl();
+  });
+}
+syncSystemBars(currentTheme());
+
 const money = (v) => 'R$ ' + Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
 const dateFmt = (v) => new Date(v).toLocaleDateString('pt-BR');
 const timeFmt = (v) => new Date(v).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
@@ -149,9 +208,14 @@ const initials = (name) => (name || '?').trim().split(/\s+/).slice(0, 2).map((w)
 const normalize = (s) => (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 const esc = (s) => (s || '').replace(/</g, '&lt;');
 
+// Avatar de fallback (sem foto): é um data-URI de SVG, então não enxerga as
+// variáveis CSS do tema — as cores precisam ser escolhidas aqui na mão.
 function avatarDataUri(name) {
   const txt = initials(name);
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect width="100" height="100" rx="50" fill="#FDEAD6"/><text x="50" y="58" font-family="Inter,sans-serif" font-size="38" font-weight="700" fill="#D96A0F" text-anchor="middle">${txt}</text></svg>`;
+  const dark = currentTheme() === 'dark';
+  const bg = dark ? '#3B2A17' : '#FDEAD6';
+  const fg = dark ? '#F0A868' : '#D96A0F';
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect width="100" height="100" rx="50" fill="${bg}"/><text x="50" y="58" font-family="Inter,sans-serif" font-size="38" font-weight="700" fill="${fg}" text-anchor="middle">${txt}</text></svg>`;
   return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
 }
 // Tentativa anterior: reescrever pro proxy /img/ do backend pra contornar o
@@ -195,8 +259,10 @@ const categoryIcon = {
   'Guincho': '🚨', 'Viagens': '🧳', 'Criar site e Apps': '🌐', 'Técnico de Informática': '🖥️',
   'Motorista de App': '🚕', 'Freelancer': '🧑‍💻', 'Motoboy': '🛵', 'Marido de Aluguel': '🧰',
 };
-const catBg = ['#FDEAD6', '#DBEAFE', '#DCFCE7', '#EDE9FE', '#FEF3C7', '#FEE2E2'];
-const catFg = ['#D96A0F', '#3B82F6', '#16A34A', '#8B5CF6', '#D97706', '#DC2626'];
+// As 6 cores que rodam nos ícones de categoria saíram do JS e viraram classes
+// (.cat-0 … .cat-5) no style.css: assim elas mudam junto com o tema sem
+// precisar re-renderizar a tela quando o usuário troca claro/escuro.
+const CAT_COLOR_COUNT = 6;
 
 // Card de categoria reaproveitado na home e na busca ("ver todas") — mesma
 // aparência nos dois lugares. Usa a foto que o admin subiu pra categoria
@@ -208,7 +274,7 @@ function categoryChipHTML(c, i) {
   return `
     <div class="chip ${c.hasProviders ? 'has-providers' : ''} ${c.image_url ? 'has-image' : ''}" onclick="openCategory('${c.name.replace(/'/g, "\\'")}')">
       ${c.hasProviders ? '<span class="chip-badge">Disponível</span>' : ''}
-      <div class="chip-icon" style="background:${catBg[(i || 0) % catBg.length]};color:${catFg[(i || 0) % catFg.length]};">${icon}</div>
+      <div class="chip-icon cat-${(i || 0) % CAT_COLOR_COUNT}">${icon}</div>
       <div class="chip-title">${c.name}</div>
     </div>
   `;
@@ -2164,7 +2230,7 @@ async function viewProviderProfile(providerId, returnTo = 'proposals') {
             <div style="font-size:13.5px;font-weight:700;">${it.name}</div>
             <div style="font-size:12px;color:var(--ink-soft);">${money(it.price)} por ${it.unit}</div>
           </div>
-          <div style="display:flex;align-items:center;gap:8px;background:var(--bg-soft, #F3F4F6);border-radius:20px;padding:4px 8px;">
+          <div style="display:flex;align-items:center;gap:8px;background:var(--paper);border-radius:20px;padding:4px 8px;">
             <span style="cursor:pointer;color:var(--ink-soft);font-size:16px;font-weight:700;padding:0 4px;" onclick="adjustCatalogQty('${it.id}','${cat.replace(/'/g, "\\'")}',-1)">−</span>
             <span id="catalog-qty-${it.id}" style="min-width:14px;text-align:center;font-size:13px;font-weight:700;">0</span>
             <span style="cursor:pointer;color:var(--primary);font-size:16px;font-weight:700;padding:0 4px;" onclick="adjustCatalogQty('${it.id}','${cat.replace(/'/g, "\\'")}',1)">+</span>
@@ -4057,6 +4123,7 @@ async function loadProfile() {
   document.getElementById('profile-avatar').src = avatarSrc(user);
   document.getElementById('profile-name').textContent = user.name;
   document.getElementById('profile-email').textContent = user.email;
+  updateThemeControl();
 
   const verifiedCard = document.getElementById('profile-verified-card');
   const roleBadge = document.getElementById('profile-role-badge');
