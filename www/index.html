@@ -9,7 +9,7 @@
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#22C55E">
 <link rel="apple-touch-icon" href="icon-192.png">
-<link rel="stylesheet" href="style.css?v=20260810a">
+<link rel="stylesheet" href="style.css?v=20260810b">
 <script>
 // Tema tem que ser aplicado ANTES do CSS pintar a tela, senão o app abre claro
 // e pisca pro escuro (FOUC). Por isso é inline aqui no head, e não no app.js —
@@ -536,6 +536,7 @@
     </div>
     <div class="screen-scroll">
       <p style="font-size:12.5px;color:var(--ink-soft);margin-top:0;" id="proposals-subtitle"></p>
+      <h3 style="font-size:17px;margin:14px 0 12px;" id="proposals-count"></h3>
       <div id="proposals-list"></div>
       <button class="btn btn-ghost btn-block" id="cancel-request-btn" style="margin-top:16px;color:var(--danger);border-color:var(--danger);" onclick="cancelRequest()">Cancelar pedido</button>
     </div>
@@ -1721,7 +1722,7 @@
 </div>
 
 <script src="config.js"></script>
-<script src="app.js?v=20260810b"></script>
+<script src="app.js?v=20260810c"></script>
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => navigator.serviceWorker.register('sw.js'));

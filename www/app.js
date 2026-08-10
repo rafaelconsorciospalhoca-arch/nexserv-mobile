@@ -2133,6 +2133,12 @@ async function openProposalsScreen(r) {
   currentChat = { requestId: r.id };
   document.getElementById('proposals-subtitle').textContent = `${r.service_name} · ${r.category}`;
   const proposals = await api(`/requests/${r.id}/proposals`);
+  // O serviço é o mesmo pra todas as propostas (é o pedido do cliente), então
+  // fica só aqui no topo em vez de repetir dentro de cada card.
+  const countEl = document.getElementById('proposals-count');
+  countEl.textContent = proposals.length
+    ? `${proposals.length} ${proposals.length === 1 ? 'proposta recebida' : 'propostas recebidas'}`
+    : '';
   document.getElementById('proposals-list').innerHTML = proposals.length
     ? proposals.map((p) => proposalTicketHTML(r, p)).join('')
     : '<div class="empty-state"><span class="glyph">⏳</span><p>Ainda sem propostas. Prestadores da região serão notificados.</p></div>';
@@ -2152,26 +2158,42 @@ async function cancelRequest(requestId) {
 
 function proposalTicketHTML(r, p) {
   const rating = parseFloat(p.rating_avg) || 0;
+  const count = p.rating_count || 0;
+  // A profissão vem de pp.categories (o prestador pode ter mais de uma) — mostra
+  // a que casa com o pedido, senão a primeira dele.
+  const cats = Array.isArray(p.categories) ? p.categories : [];
+  const job = cats.includes(r.category) ? r.category : cats[0];
+  const city = [p.provider_city, p.provider_state].filter(Boolean).join(', ');
+  const safeName = p.provider_name.replace(/'/g, "\\'");
+  const badges = [
+    p.is_founder ? '<span class="badge-founder">🏆 Fundador</span>' : '',
+    p.is_subscriber ? '<span class="badge-pro">⭐ PRO</span>' : '',
+    p.featured ? '<span class="badge-featured">Proposta em destaque</span>' : (p.provider_featured ? '<span class="badge-featured">Destaque</span>' : ''),
+  ].filter(Boolean).join('');
+
   return `
     <div class="ticket">
-      <div class="ticket-row">
-        <div class="avatar">${avatarBoxHTML(p.provider_name, p.provider_photo_url)}</div>
-        <div class="ticket-info">
-          <div class="name-row"><span class="name">${p.provider_name}</span>${p.is_founder ? '<span class="badge-founder">🏆 Fundador</span>' : ''}${p.is_subscriber ? '<span class="badge-pro">⭐ PRO</span>' : ''}${p.featured ? '<span class="badge-featured">Proposta em destaque</span>' : (p.provider_featured ? '<span class="badge-featured">Destaque</span>' : '')}</div>
-          <div class="stars">${'★'.repeat(Math.round(rating)) || '—'} ${rating ? rating.toFixed(1) : ''} · ${p.rating_count || 0} serviços</div>
+      <div class="p-head">
+        <div class="p-avatar">${avatarBoxHTML(p.provider_name, p.provider_photo_url)}</div>
+        <div class="p-ident">
+          <div class="p-name-line">${esc(p.provider_name)}${job ? ` <span class="p-job">• ${esc(job)}</span>` : ''}</div>
+          <div class="p-rating">
+            <span class="p-stars">${rating ? '★'.repeat(Math.round(rating)) : '—'}</span>
+            ${rating ? `<span class="p-score">${rating.toFixed(1)}</span>` : ''}
+            <span class="p-count">(${count} ${count === 1 ? 'avaliação' : 'avaliações'})</span>
+          </div>
+          ${city ? `<div class="p-city">📍 ${esc(city)}</div>` : ''}
+          ${badges ? `<div class="p-badges">${badges}</div>` : ''}
         </div>
       </div>
-      <div class="ticket-divider"></div>
-      <div class="ticket-meta">
-        <span class="price">${money(p.value)}</span>
-        <span class="prazo">${p.availability || ''}</span>
+      ${p.notes ? `<div class="p-notes">${esc(p.notes)}</div>` : ''}
+      ${p.availability ? `<div class="p-availability">🗓️ ${esc(p.availability)}</div>` : ''}
+      <div class="p-price">${money(p.value)}</div>
+      <button class="btn btn-primary btn-block" style="margin-top:12px;" onclick="acceptProposal(this,'${r.id}','${p.id}','${safeName}',${p.value})">Aceitar proposta</button>
+      <div class="p-actions">
+        <button class="btn btn-ghost btn-small" onclick="openChatThread('${r.id}','${p.provider_id}','${safeName}')">💬 Mensagem</button>
       </div>
-      ${p.notes ? `<div style="font-size:12.5px;color:var(--ink-soft);margin:2px 0 8px;">${p.notes}</div>` : ''}
-      <div class="ticket-actions">
-        <button class="btn btn-ghost" onclick="viewProviderProfile('${p.provider_id}')">Ver perfil</button>
-        <button class="btn btn-ghost" onclick="openChatThread('${r.id}','${p.provider_id}','${p.provider_name.replace(/'/g, "\\'")}')">💬 Mensagem</button>
-      </div>
-      <button class="btn btn-primary btn-block" style="margin-top:10px;" onclick="acceptProposal(this,'${r.id}','${p.id}','${p.provider_name.replace(/'/g, "\\'")}',${p.value})">Aceitar</button>
+      <button class="p-details" onclick="viewProviderProfile('${p.provider_id}')">Ver detalhes</button>
     </div>
   `;
 }
