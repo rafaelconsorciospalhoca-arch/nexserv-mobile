@@ -2062,7 +2062,7 @@ function setMyRequestsFilter(filter) {
 
 function renderMyRequestsFilterTabs() {
   const tabs = [
-    { id: 'all', label: 'Todas' }, { id: 'pending', label: 'Aguardando propostas' },
+    { id: 'all', label: 'Todas' }, { id: 'pending', label: 'Em aberto' },
     { id: 'progress', label: 'Em andamento' }, { id: 'done', label: 'Concluídas' },
   ];
   document.getElementById('my-requests-filter-tabs').innerHTML = tabs.map((t) => `
@@ -2070,31 +2070,67 @@ function renderMyRequestsFilterTabs() {
   `).join('');
 }
 
+// Data curta pro card ("15 Out") — o pt-BR devolve "15 de out.", que fica
+// comprido demais na linha do rodapé junto com o selo de status.
+function shortDate(v) {
+  const d = new Date(v);
+  const mes = d.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '');
+  return `${String(d.getDate()).padStart(2, '0')} ${mes.charAt(0).toUpperCase()}${mes.slice(1)}`;
+}
+
+// O que o selo do card mostra, na mesma ordem de prioridade de antes:
+// aviso de novidade primeiro, depois pendência de pagamento, e só então o
+// status. A contagem de propostas entra quando o pedido está aberto.
+function requestPill(r, { hasNew, awaitingClientPayment }) {
+  if (hasNew && r.status === 'pending') return { label: 'Nova proposta! Toque para ver', tone: 'is-active' };
+  if (awaitingClientPayment) return { label: 'Aguardando pagamento do cliente', tone: 'is-alert' };
+  if (r.status === 'pending' && r.proposal_count > 0) {
+    return { label: `${r.proposal_count} ${r.proposal_count === 1 ? 'proposta recebida' : 'propostas recebidas'}`, tone: 'is-active' };
+  }
+  const tone = r.status === 'done' ? 'is-done'
+    : ['canceled', 'rejected'].includes(r.status) ? 'is-danger'
+    : r.status === 'pending' ? 'is-alert'
+    : 'is-active';
+  return { label: statusLabels[r.status] || r.status, tone };
+}
+
+let myRequestsSearch = '';
+function setMyRequestsSearch(term) {
+  myRequestsSearch = term;
+  loadMyRequests();
+}
+
 async function loadMyRequests() {
   renderMyRequestsFilterTabs();
   const [allRequests, unreadRequestIds] = await Promise.all([api('/requests/mine'), getUnreadRequestIds()]);
-  const requests = allRequests.filter(myRequestsFilterGroups[myRequestsFilter]);
+  const termo = normalize(myRequestsSearch.trim());
+  const requests = allRequests
+    .filter(myRequestsFilterGroups[myRequestsFilter])
+    .filter((r) => !termo || normalize(`${r.service_name} ${r.category}`).includes(termo));
   document.getElementById('my-requests-list').innerHTML = requests.map((r) => {
     const hasNew = unreadRequestIds.has(r.id);
-    const isPending = r.status === 'pending';
     // Prestador não tem como diferenciar "cliente aceitou mas ainda não
     // pagou" de "cliente já pagou, pode começar" só pelo status do pedido
     // (os dois casos ficam "accepted") — sem isso, fica esperando sem saber
     // se o serviço já está de fato confirmado.
     const awaitingClientPayment = user.role === 'provider' && r.status === 'accepted' && r.payment_status !== 'paid';
+    const pill = requestPill(r, { hasNew, awaitingClientPayment });
     return `
-    <div class="req-card ${hasNew ? 'has-new' : ''}" onclick="openMyRequest('${r.id}')">
-      <div class="row1"><span class="title">${hasNew ? '<span class="new-dot"></span>' : ''}${r.service_name}</span>${
-        hasNew && isPending ? '<span class="pill accepted">Nova proposta! Toque para ver</span>'
-          : awaitingClientPayment ? '<span class="pill pending">Aguardando pagamento do cliente</span>'
-          : statusPillHTML(r.status)
-      }</div>
-      <div class="meta-row">${dateFmt(r.created_at)} · ${r.category}${r.value ? ' · ' + money(r.value) : ''}</div>
-      ${tripInfoHTML(r)}
-      ${r.status === 'done' && r.provider_id ? `<button class="btn btn-ghost btn-small btn-block" style="margin-top:8px;" onclick="event.stopPropagation();rebookRequest('${r.id}')">🔁 Recontratar ${r.provider_name || ''}</button>` : ''}
+    <div class="rq-item ${hasNew ? 'has-new' : ''}" onclick="openMyRequest('${r.id}')">
+      <div class="rq-icon">${categoryIcon[r.category] || '🛠️'}</div>
+      <div class="rq-body">
+        <div class="rq-title">${hasNew ? '<span class="new-dot"></span>' : ''}${esc(r.service_name)}</div>
+        <div class="rq-sub">${esc(r.category)}${r.value ? ' · ' + money(r.value) : ''}</div>
+        ${tripInfoHTML(r)}
+        <div class="rq-foot">
+          <span class="rq-date">${shortDate(r.created_at)}</span>
+          <span class="rq-pill ${pill.tone}">${pill.label}</span>
+        </div>
+        ${r.status === 'done' && r.provider_id ? `<button class="btn btn-ghost btn-small btn-block" style="margin-top:10px;" onclick="event.stopPropagation();rebookRequest('${r.id}')">🔁 Recontratar ${esc(r.provider_name || '')}</button>` : ''}
+      </div>
     </div>
   `;
-  }).join('') || '<div class="empty-state"><span class="glyph">📭</span><p>Nenhuma solicitação por aqui.</p></div>';
+  }).join('') || `<div class="empty-state"><span class="glyph">📭</span><p>${termo ? 'Nenhuma solicitação encontrada com esse termo.' : 'Nenhuma solicitação por aqui.'}</p></div>`;
 }
 
 async function openMyRequest(requestId) {

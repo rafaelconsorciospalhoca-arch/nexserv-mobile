@@ -9,7 +9,7 @@
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#22C55E">
 <link rel="apple-touch-icon" href="icon-192.png">
-<link rel="stylesheet" href="style.css?v=20260810b">
+<link rel="stylesheet" href="style.css?v=20260810c">
 <script>
 // Tema tem que ser aplicado ANTES do CSS pintar a tela, senão o app abre claro
 // e pisca pro escuro (FOUC). Por isso é inline aqui no head, e não no app.js —
@@ -672,6 +672,10 @@
     <div class="topbar"><h2>Minhas solicitações</h2></div>
     <div class="screen-scroll">
       <div class="filter-tabs" id="my-requests-filter-tabs"></div>
+      <div class="rq-search">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.3-4.3"/></svg>
+        <input type="search" id="my-requests-search" placeholder="Buscar solicitações..." oninput="setMyRequestsSearch(this.value)">
+      </div>
       <div id="my-requests-list"></div>
     </div>
     <div class="toolbox-nav" id="my-requests-nav"></div>
@@ -1722,7 +1726,7 @@
 </div>
 
 <script src="config.js"></script>
-<script src="app.js?v=20260810c"></script>
+<script src="app.js?v=20260810d"></script>
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => navigator.serviceWorker.register('sw.js'));
