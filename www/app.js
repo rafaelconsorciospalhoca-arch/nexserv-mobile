@@ -1908,13 +1908,18 @@ async function createRequest(btn) {
     fd.append('tripDetails', document.getElementById('req-trip-details').value.trim());
   }
   if (requestDraft.preferredProviderId) fd.append('preferredProviderId', requestDraft.preferredProviderId);
-  const photos = document.getElementById('req-photos').files;
-  for (const file of photos) fd.append('photos', file);
+  const photos = Array.from(document.getElementById('req-photos').files);
 
   const originalText = btn.textContent;
   btn.disabled = true;
   btn.textContent = 'Enviando...';
   try {
+    // Mesma compressão do envio de documento (KYC): foto de câmera de celular
+    // vem com vários MB e aqui podem ser várias de uma vez — sem reduzir
+    // antes, o envio demora demais (ou cai) em 4G fraco.
+    const compressed = await Promise.all(photos.map((f) => compressImage(f)));
+    for (const file of compressed) fd.append('photos', file);
+
     await api('/requests', { method: 'POST', body: fd });
     // Evento de conversão "solicitou orçamento" — content_name separa esse
     // Lead do da lista de espera no Gerenciador de Eventos da Meta, pra dar
@@ -4033,7 +4038,9 @@ async function changeProfilePhoto(input) {
   const file = input.files[0];
   if (!file) return;
   const fd = new FormData();
-  fd.append('photo', file);
+  // Avatar é exibido em no máximo ~100px — não há motivo pra subir os vários
+  // MB que a câmera do celular gera.
+  fd.append('photo', await compressImage(file));
   try {
     const { photoUrl } = await api('/auth/me/photo', { method: 'PUT', body: fd });
     user.photoUrl = photoUrl;
