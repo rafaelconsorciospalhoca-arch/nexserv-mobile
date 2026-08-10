@@ -1387,8 +1387,18 @@ function setInstantServicesCategory(cat) {
   renderInstantServicesList();
 }
 
+let trackSearchTimer = null;
+// Dispara Search 800ms depois que a pessoa para de digitar — em vez de a
+// cada tecla, que lotaria o Gerenciador de Eventos com ruído inútil.
+function trackSearchDebounced(query) {
+  if (trackSearchTimer) clearTimeout(trackSearchTimer);
+  if (!query || !query.trim()) return;
+  trackSearchTimer = setTimeout(() => trackConversionEvent('Search', { search_string: query.trim() }), 800);
+}
+
 function filterInstantServices(query) {
   renderInstantServicesList(query);
+  trackSearchDebounced(query);
 }
 
 function renderInstantServicesList(query) {
@@ -1430,6 +1440,7 @@ async function openInstantServiceDetail(id) {
   // (ex: "Montagem" + "Desmontagem" de móveis).
   instantDetailSelectedVariationIds = new Set(s.variations && s.variations.length ? [s.variations[0].id] : []);
   renderInstantServiceDetail();
+  trackConversionEvent('ViewContent', { content_name: s.name, content_category: s.category, value: s.display_price != null ? parseFloat(s.display_price) : undefined, currency: 'BRL' });
 }
 
 function selectedInstantVariations() {
@@ -1551,6 +1562,7 @@ function startInstantCheckout() {
   document.getElementById('instant-addr-description').value = '';
   document.getElementById('instant-addr-error').textContent = '';
   showScreen('instant-checkout-address');
+  trackConversionEvent('AddToCart', { content_name: baseName, value: unitPrice * instantDetailQuantity, currency: 'BRL' });
 }
 
 let instantCheckoutMode = false;
@@ -1593,6 +1605,7 @@ function goToInstantPaymentScreen() {
   document.getElementById('confirm-payment-btn').disabled = false;
   showScreen('payment');
   selectPayMethod(document.querySelector('.screen[data-screen="payment"] .pay-method[data-method="pix"]'));
+  trackConversionEvent('InitiateCheckout', { content_name: instantCheckoutContext.serviceLabel, value: price, currency: 'BRL' });
 }
 
 async function confirmInstantPayment() {
@@ -1604,6 +1617,7 @@ async function confirmInstantPayment() {
   btn.textContent = 'Processando...';
   const errorEl = document.getElementById('payment-error');
   errorEl.textContent = '';
+  trackConversionEvent('AddPaymentInfo', { content_name: instantCheckoutContext.serviceLabel, value: instantCheckoutContext.price, currency: 'BRL' });
 
   const body = {
     paymentMethod: payMethod,
@@ -1778,6 +1792,7 @@ function openSearchScreen() {
 }
 
 async function filterSearch(query) {
+  trackSearchDebounced(query);
   const categories = await ensureCategories();
   const q = normalize(query);
   const results = document.getElementById('search-results');
@@ -2308,6 +2323,7 @@ function goToPaymentScreen(updated, providerName) {
   btn.textContent = 'Pagar e confirmar serviço';
   showScreen('payment');
   selectPayMethod(document.querySelector('.screen[data-screen="payment"] .pay-method[data-method="pix"]'));
+  trackConversionEvent('InitiateCheckout', { content_name: updated.service_name, value: parseFloat(updated.value), currency: 'BRL' });
 
   // Crédito de carteira (ganho num cancelamento anterior por culpa do
   // prestador) abate automático na hora de pagar — só avisa aqui, quem
@@ -2425,6 +2441,7 @@ async function confirmPayment() {
   const errorEl = document.getElementById('payment-error');
   errorEl.textContent = '';
   const requestId = currentChat.requestId;
+  trackConversionEvent('AddPaymentInfo', { value: parseFloat((document.getElementById('pay-total').textContent || '').replace(/[^\d,]/g, '').replace(',', '.')) || undefined, currency: 'BRL' });
 
   const body = { paymentMethod: payMethod };
   if (appliedCoupon) body.couponCode = appliedCoupon.code;
@@ -2695,6 +2712,7 @@ async function submitServiceRating() {
 
 function openChatFromConfirm() {
   if (!lastPaymentContext) return;
+  if (user.role === 'client') trackConversionEvent('Contact');
   openChatThread(lastPaymentContext.requestId, lastPaymentContext.otherId, lastPaymentContext.otherName || 'Chat');
 }
 
