@@ -4166,10 +4166,15 @@ async function changeProfilePhoto(input) {
   // MB que a câmera do celular gera.
   fd.append('photo', await compressImage(file));
   try {
-    const { photoUrl } = await api('/auth/me/photo', { method: 'PUT', body: fd });
-    user.photoUrl = photoUrl;
-    localStorage.setItem('chama_user', JSON.stringify(user));
-    document.getElementById('profile-avatar').src = photoUrl;
+    const result = await api('/auth/me/photo', { method: 'PUT', body: fd });
+    if (result.pending) {
+      alert('Foto enviada! Prestadores sem o Plano PRO passam por uma análise rápida — resposta em até 48 horas. Sua foto atual continua no ar até lá.');
+    } else {
+      user.photoUrl = result.photoUrl;
+      localStorage.setItem('chama_user', JSON.stringify(user));
+      document.getElementById('profile-avatar').src = result.photoUrl;
+    }
+    if (user.role === 'provider') loadProfile();
   } catch (err) {
     alert(err.message);
   } finally {
@@ -4190,8 +4195,12 @@ async function loadProfile() {
   const extra = document.getElementById('profile-extra');
 
   if (user.role === 'provider') {
-    const p = await api(`/providers/${user.id}`);
+    const [p, photoReq] = await Promise.all([
+      api(`/providers/${user.id}`),
+      api('/providers/photo-request/mine'),
+    ]);
     roleBadge.innerHTML = `${p.is_founder ? '<span class="badge-founder">🏆 Fundador</span>' : ''}${p.is_subscriber ? '<span class="badge-pro">⭐ PRO</span>' : ''}<span class="role-badge">${p.level || 'Bronze'}</span>`;
+    renderPhotoStatusCard(photoReq.request, p.is_subscriber);
     const verificationLabels = { pending: 'Verificação em análise', active: 'Conta verificada', suspended: 'Conta suspensa', rejected: 'Verificação rejeitada' };
     verifiedCard.style.display = 'flex';
     document.getElementById('profile-verified-title').textContent = verificationLabels[p.status] || p.status;
@@ -4273,6 +4282,29 @@ async function loadProfile() {
         <div class="error-msg" id="profile-document-msg"></div>
       `;
     }
+  }
+}
+
+// Card de status da foto de perfil na tela de Perfil — some se não há
+// pedido, se já foi aprovado, ou se o prestador é assinante PRO (troca
+// sempre direto, sem fila). Fica visível enquanto pendente ou recusado.
+function renderPhotoStatusCard(request, isSubscriber) {
+  const card = document.getElementById('profile-photo-status-card');
+  const cta = document.getElementById('profile-photo-status-cta');
+  if (!request || request.status === 'approved' || isSubscriber) {
+    card.style.display = 'none';
+    cta.style.display = 'none';
+    return;
+  }
+  card.style.display = 'flex';
+  if (request.status === 'pending') {
+    document.getElementById('profile-photo-status-title').textContent = 'Foto em análise';
+    document.getElementById('profile-photo-status-sub').textContent = 'Resposta em até 48 horas. Sua foto atual continua no ar.';
+    cta.style.display = 'none';
+  } else if (request.status === 'rejected') {
+    document.getElementById('profile-photo-status-title').textContent = 'Foto não aprovada';
+    document.getElementById('profile-photo-status-sub').textContent = request.rejectReasonLabel || 'Motivo não informado';
+    cta.style.display = '';
   }
 }
 
