@@ -4441,7 +4441,13 @@ async function loadProviderPortfolioScreen() {
     api(`/providers/${user.id}`),
   ]);
   renderPortfolioGrid(photos);
-  document.getElementById('portfolio-upload-box').style.display = photos.length >= MAX_PORTFOLIO_PHOTOS ? 'none' : '';
+  // Fotos já enviadas (por quem era assinante ou foi cadastrado antes do
+  // corte) continuam visíveis e removíveis mesmo se o acesso for bloqueado
+  // agora — só o upload de fotos novas fica travado.
+  const locked = !profile.portfolioAllowed;
+  document.getElementById('portfolio-locked-card').style.display = locked ? 'flex' : 'none';
+  document.getElementById('portfolio-locked-cta').style.display = locked ? '' : 'none';
+  document.getElementById('portfolio-upload-box').style.display = (!locked && photos.length < MAX_PORTFOLIO_PHOTOS) ? '' : 'none';
   document.getElementById('provider-bio-input').value = profile.bio || '';
 }
 
