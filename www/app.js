@@ -431,6 +431,124 @@ function goToLogin() {
   showScreen('login');
 }
 
+// ---------- Login com Google ----------
+// dispara o popup do Google no navegador (SDK web, inicializado no
+// <script type="module"> de index.html) e devolve o token do Firebase +
+// o perfil básico. Cancelar o popup não é erro — só devolve null.
+// No app nativo (Capacitor), Service Worker/SDK web de login costumam
+// falhar dentro de WebView — usa o plugin nativo @capacitor-firebase/authentication
+// em vez do SDK web (mesma razão documentada pro cache de fotos em disco,
+// ver imgProxy). No navegador (site), continua usando o SDK web do
+// Firebase normalmente.
+async function googleAuthProfile() {
+  if (window.Capacitor?.isNativePlatform?.()) {
+    const FirebaseAuthentication = window.Capacitor?.Plugins?.FirebaseAuthentication;
+    if (!FirebaseAuthentication) throw new Error('Login com Google indisponível no momento.');
+    let result;
+    try {
+      result = await FirebaseAuthentication.signInWithGoogle();
+    } catch (err) {
+      // O plugin não documenta o texto exato do erro de cancelamento —
+      // esse filtro é uma estimativa. Ajustar durante o teste ao vivo
+      // se cancelar o login mostrar a mensagem de erro genérica
+      // em vez de simplesmente voltar pra tela, sem quebrar nada além da
+      // UX desse caso específico.
+      if (err.message?.includes('CANCELED') || err.message?.includes('cancel')) return null;
+      throw new Error('Não foi possível entrar com o Google. Tente novamente.');
+    }
+    if (!result?.credential?.idToken) return null; // cancelado sem lançar erro, dependendo da plataforma
+    return {
+      idToken: result.credential.idToken,
+      name: result.user?.displayName || null,
+      email: result.user?.email || null,
+      photoUrl: result.user?.photoUrl || null,
+    };
+  }
+
+  const auth = window.__firebaseAuth;
+  if (!auth) throw new Error('Login com Google indisponível no momento.');
+  let result;
+  try {
+    result = await window.__signInWithPopup(auth, new window.__GoogleAuthProvider());
+  } catch (err) {
+    if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') return null;
+    throw new Error('Não foi possível entrar com o Google. Tente novamente.');
+  }
+  const idToken = await result.user.getIdToken();
+  return { idToken, name: result.user.displayName, email: result.user.email, photoUrl: result.user.photoURL };
+}
+
+async function handleGoogleLoginClick() {
+  const btn = document.getElementById('google-login-btn');
+  const errorEl = document.getElementById('login-error');
+  errorEl.textContent = '';
+  btn.disabled = true;
+  try {
+    const profile = await googleAuthProfile();
+    if (!profile) { btn.disabled = false; return; } // popup cancelado, sem erro
+    const res = await fetch(`${API_BASE}/auth/google-login`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ idToken: profile.idToken }),
+    });
+    const data = await res.json();
+    if (res.ok) {
+      saveSession(data.token, data.user);
+      enterApp();
+      return;
+    }
+    if (data.error === 'no_account') {
+      openRegister('client', 'login');
+      prefillRegisterFromGoogle(profile);
+      return;
+    }
+    throw new Error(data.error || 'Erro ao entrar com Google');
+  } catch (err) {
+    errorEl.textContent = err.message;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+let registerGoogleIdToken = null;
+
+function prefillRegisterFromGoogle(profile) {
+  registerGoogleIdToken = profile.idToken;
+  document.getElementById('reg-name').value = profile.name || '';
+  document.getElementById('reg-email').value = profile.email || '';
+  document.getElementById('reg-name').readOnly = true;
+  document.getElementById('reg-email').readOnly = true;
+  document.getElementById('reg-password-field').style.display = 'none';
+  document.getElementById('google-register-btn').style.display = 'none';
+  document.getElementById('reg-google-badge').style.display = 'block';
+}
+
+async function handleGoogleRegisterClick() {
+  const errorEl = document.getElementById('register-error');
+  errorEl.textContent = '';
+  const btn = document.getElementById('google-register-btn');
+  btn.disabled = true;
+  let profile;
+  try {
+    profile = await googleAuthProfile();
+  } catch (err) {
+    errorEl.textContent = err.message;
+    btn.disabled = false;
+    return;
+  }
+  if (!profile) { btn.disabled = false; return; } // popup cancelado
+  prefillRegisterFromGoogle(profile);
+  btn.disabled = false;
+  // Cliente não tem nenhum campo obrigatório além de nome/e-mail/termos —
+  // um clique no Google já basta pra completar o cadastro. Prestador
+  // precisa preencher CPF/CNPJ, endereço e categorias antes, então só
+  // pré-preenche e espera o clique em "Criar conta" (doRegister cuida do
+  // próprio estado de disabled/texto do botão a partir daqui, por isso
+  // reaproveitamos ele passando o mesmo botão do Google).
+  if (selectedRole === 'client') {
+    await doRegister(btn);
+  }
+}
+
 function openComingSoon(feature) {
   alert(`${feature} — em breve no NEXSERV.`);
 }
@@ -545,6 +663,17 @@ function setRole(role) {
 
   document.getElementById('how-it-works-btn').style.display = role === 'provider' ? 'block' : 'none';
   if (role === 'provider') { renderRegCategoryChips(); loadRegCityChips(); }
+
+  registerGoogleIdToken = null;
+  document.getElementById('reg-name').readOnly = false;
+  document.getElementById('reg-email').readOnly = false;
+  document.getElementById('reg-password-field').style.display = '';
+  document.getElementById('google-register-btn').style.display = '';
+  document.getElementById('google-register-btn-label').textContent =
+    role === 'client' ? 'Cadastrar com Google' : 'Preencher nome e e-mail com o Google';
+  document.getElementById('reg-google-badge').style.display = 'none';
+  document.getElementById('reg-name').value = '';
+  document.getElementById('reg-email').value = '';
 }
 
 let providerPromoCache = null;
@@ -1071,7 +1200,11 @@ async function doRegister(btn) {
   fd.append('termsAccepted', 'true');
   fd.append('name', document.getElementById('reg-name').value);
   fd.append('email', document.getElementById('reg-email').value);
-  fd.append('password', document.getElementById('reg-password').value);
+  if (registerGoogleIdToken) {
+    fd.append('googleIdToken', registerGoogleIdToken);
+  } else {
+    fd.append('password', document.getElementById('reg-password').value);
+  }
   fd.append('phone', document.getElementById('reg-phone').value);
   const referral = document.getElementById('reg-referral').value.trim();
   if (referral) fd.append('referralCode', referral);
