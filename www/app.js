@@ -226,7 +226,57 @@ function avatarDataUri(name) {
 // usuário real: ficou mais lento). Volta a bater direto no Supabase — o
 // cache do lado do navegador (ver sw.js) continua tentando ajudar sem esse
 // custo extra de rede.
+//
+// No site, sw.js resolve o cache. Dentro do app nativo (Capacitor, Android
+// e iOS) Service Worker é pouco confiável em WebView — então aqui usamos o
+// plugin Filesystem do Capacitor pra guardar a foto em disco na primeira vez
+// que ela aparece e ler de lá nas próximas, sem depender do SW. Nome do
+// arquivo nunca muda pra uma mesma foto (UUID aleatório no upload, nunca
+// sobrescrito) — cache pra sempre é seguro. A primeira exibição de cada foto
+// continua batendo na rede igual antes; só a partir da segunda fica rápida.
+const imageDiskCache = new Map(JSON.parse(localStorage.getItem('chama_image_cache') || '[]'));
+const imageCachingInFlight = new Set();
+
+function persistImageDiskCache() {
+  try { localStorage.setItem('chama_image_cache', JSON.stringify([...imageDiskCache])); } catch { /* localStorage cheio/indisponível, ignora */ }
+}
+
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result.split(',')[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function cacheImageToDisk(url) {
+  if (imageDiskCache.has(url) || imageCachingInFlight.has(url)) return;
+  const Filesystem = window.Capacitor?.Plugins?.Filesystem;
+  if (!Filesystem) return;
+  imageCachingInFlight.add(url);
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return;
+    const base64 = await blobToBase64(await res.blob());
+    const fileName = 'img-cache/' + btoa(url).replace(/[/+=]/g, '') + '.bin';
+    await Filesystem.writeFile({ path: fileName, data: base64, directory: 'CACHE', recursive: true });
+    const { uri } = await Filesystem.getUri({ path: fileName, directory: 'CACHE' });
+    imageDiskCache.set(url, window.Capacitor.convertFileSrc(uri));
+    persistImageDiskCache();
+  } catch (err) {
+    console.error('Falha ao cachear imagem em disco:', err.message);
+  } finally {
+    imageCachingInFlight.delete(url);
+  }
+}
+
 function imgProxy(url) {
+  if (!url) return url;
+  if (!window.Capacitor?.isNativePlatform?.()) return url; // site: sw.js cuida do cache
+  const cached = imageDiskCache.get(url);
+  if (cached) return cached;
+  cacheImageToDisk(url); // dispara em background, não trava a renderização da tela
   return url;
 }
 function avatarSrc(u) {
