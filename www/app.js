@@ -573,9 +573,15 @@ async function handleGoogleRedirectResult() {
     result = await window.__getRedirectResult(auth);
   } catch (err) {
     console.error('Erro ao processar retorno do login com Google:', err.message);
+    alert('[DEBUG temporário] Erro no retorno do login Google: ' + err.code + ' — ' + err.message); // DEBUG temporário
     return false;
   }
-  if (!result) return false; // carregamento normal, não veio de um redirect do Google
+  if (!result) {
+    if (localStorage.getItem(GOOGLE_REDIRECT_INTENT_KEY)) {
+      alert('[DEBUG temporário] Voltou do Google mas getRedirectResult() não achou nada (result=null). Provável causa: navegador perdeu o estado do redirect.'); // DEBUG temporário
+    }
+    return false; // carregamento normal, não veio de um redirect do Google
+  }
 
   const stored = localStorage.getItem(GOOGLE_REDIRECT_INTENT_KEY);
   localStorage.removeItem(GOOGLE_REDIRECT_INTENT_KEY);
