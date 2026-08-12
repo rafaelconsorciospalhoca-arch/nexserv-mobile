@@ -460,8 +460,17 @@ async function googleAuthProfile(intent) {
       throw new Error('Não foi possível entrar com o Google. Tente novamente.');
     }
     if (!result?.credential?.idToken) return null; // cancelado sem lançar erro, dependendo da plataforma
+    // result.credential.idToken é o token OAuth do GOOGLE, não do Firebase
+    // (o plugin documenta isso claramente) — o backend valida com
+    // admin.auth().verifyIdToken(), que exige um token emitido pelo
+    // Firebase, não pelo Google direto. Mandar o token errado dava
+    // "Token do Google inválido ou expirado" (erro real, não do usuário).
+    // signInWithGoogle() já loga o usuário no Firebase nativo por baixo
+    // dos panos (skipNativeAuth: false), então getIdToken() busca o token
+    // certo da sessão que acabou de ser criada.
+    const idTokenResult = await FirebaseAuthentication.getIdToken();
     return {
-      idToken: result.credential.idToken,
+      idToken: idTokenResult.token,
       name: result.user?.displayName || null,
       email: result.user?.email || null,
       photoUrl: result.user?.photoUrl || null,
