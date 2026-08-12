@@ -440,7 +440,10 @@ function goToLogin() {
 // em vez do SDK web (mesma razão documentada pro cache de fotos em disco,
 // ver imgProxy). No navegador (site), continua usando o SDK web do
 // Firebase normalmente.
-async function googleAuthProfile() {
+const IS_MOBILE_WEB = !window.Capacitor?.isNativePlatform?.() && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+const GOOGLE_REDIRECT_INTENT_KEY = 'nexserv_google_redirect_intent';
+
+async function googleAuthProfile(intent) {
   if (window.Capacitor?.isNativePlatform?.()) {
     const FirebaseAuthentication = window.Capacitor?.Plugins?.FirebaseAuthentication;
     if (!FirebaseAuthentication) throw new Error('Login com Google indisponível no momento.');
@@ -467,6 +470,20 @@ async function googleAuthProfile() {
 
   const auth = window.__firebaseAuth;
   if (!auth) throw new Error('Login com Google indisponível no momento.');
+
+  // signInWithPopup é instável em navegador mobile — muitos bloqueiam o
+  // popup em silêncio (sem lançar erro nenhum pro código pegar), então o
+  // clique parece não fazer nada. No navegador mobile usa signInWithRedirect
+  // (navega a página inteira pro Google e volta) em vez de popup; guarda a
+  // intenção (login/cadastro + papel) no localStorage porque a página recarrega
+  // e perde todo o estado em memória — GOOGLE_REDIRECT_INTENT_KEY é lido de
+  // volta em handleGoogleRedirectResult() no boot da página.
+  if (IS_MOBILE_WEB) {
+    localStorage.setItem(GOOGLE_REDIRECT_INTENT_KEY, JSON.stringify({ intent, role: selectedRole }));
+    await window.__signInWithRedirect(auth, new window.__GoogleAuthProvider());
+    return null; // não deve nem chegar aqui — a navegação já deve ter acontecido
+  }
+
   let result;
   try {
     result = await window.__signInWithPopup(auth, new window.__GoogleAuthProvider());
@@ -478,35 +495,92 @@ async function googleAuthProfile() {
   return { idToken, name: result.user.displayName, email: result.user.email, photoUrl: result.user.photoURL };
 }
 
+// Preenche/completa o cadastro a partir do perfil do Google — mesma lógica
+// usada tanto por quem clicou "Preencher com Google" na tela de cadastro
+// quanto por quem clicou "Entrar com Google" mas ainda não tem conta.
+// Pré-preenche o formulário já aberto com o perfil do Google — não navega
+// nem mexe no papel selecionado, pra não perder categorias/cidades que um
+// prestador já tivesse marcado antes de clicar no botão do Google.
+async function applyGoogleProfileToRegisterForm(profile, role) {
+  prefillRegisterFromGoogle(profile);
+  // Cliente não tem campo obrigatório além de nome/e-mail/termos, então
+  // completa o cadastro sozinho em vez de esperar um segundo clique em
+  // "Criar conta". Prestador precisa preencher CPF/CNPJ e endereço antes.
+  if (role === 'client') {
+    await doRegister(document.getElementById('google-register-btn'));
+  }
+}
+
+// Abre a tela de cadastro (quem chama ainda não estava nela — veio do botão
+// de login ou da volta de um signInWithRedirect) e aplica o perfil do Google.
+async function completeGoogleRegister(profile, role) {
+  openRegister(role, registerBackScreen || homeScreenId());
+  await applyGoogleProfileToRegisterForm(profile, role);
+}
+
+async function finishGoogleLogin(profile) {
+  const errorEl = document.getElementById('login-error');
+  const res = await fetch(`${API_BASE}/auth/google-login`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ idToken: profile.idToken }),
+  });
+  const data = await res.json();
+  if (res.ok) {
+    saveSession(data.token, data.user);
+    enterApp();
+    return;
+  }
+  if (data.error === 'no_account') {
+    await completeGoogleRegister(profile, 'client');
+    return;
+  }
+  errorEl.textContent = data.error || 'Erro ao entrar com Google';
+}
+
 async function handleGoogleLoginClick() {
   const btn = document.getElementById('google-login-btn');
   const errorEl = document.getElementById('login-error');
   errorEl.textContent = '';
   btn.disabled = true;
   try {
-    const profile = await googleAuthProfile();
-    if (!profile) { btn.disabled = false; return; } // popup cancelado, sem erro
-    const res = await fetch(`${API_BASE}/auth/google-login`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ idToken: profile.idToken }),
-    });
-    const data = await res.json();
-    if (res.ok) {
-      saveSession(data.token, data.user);
-      enterApp();
-      return;
-    }
-    if (data.error === 'no_account') {
-      openRegister('client', 'login');
-      prefillRegisterFromGoogle(profile);
-      return;
-    }
-    throw new Error(data.error || 'Erro ao entrar com Google');
+    const profile = await googleAuthProfile('login');
+    if (!profile) { btn.disabled = false; return; } // popup cancelado, ou redirecionou (mobile) — nada mais a fazer aqui
+    await finishGoogleLogin(profile);
   } catch (err) {
     errorEl.textContent = err.message;
   } finally {
     btn.disabled = false;
   }
+}
+
+// Trata a volta do signInWithRedirect (navegador mobile) — chamada uma vez
+// no boot da página. Devolve true se havia mesmo um login Google pendente
+// (pra quem chamou pular o fluxo normal de boot), false caso contrário.
+async function handleGoogleRedirectResult() {
+  const auth = window.__firebaseAuth;
+  if (!auth || !window.__getRedirectResult) return false;
+  let result;
+  try {
+    result = await window.__getRedirectResult(auth);
+  } catch (err) {
+    console.error('Erro ao processar retorno do login com Google:', err.message);
+    return false;
+  }
+  if (!result) return false; // carregamento normal, não veio de um redirect do Google
+
+  const stored = localStorage.getItem(GOOGLE_REDIRECT_INTENT_KEY);
+  localStorage.removeItem(GOOGLE_REDIRECT_INTENT_KEY);
+  const { intent, role } = stored ? JSON.parse(stored) : { intent: 'login', role: 'client' };
+
+  const idToken = await result.user.getIdToken();
+  const profile = { idToken, name: result.user.displayName, email: result.user.email, photoUrl: result.user.photoURL };
+
+  if (intent === 'register') {
+    await completeGoogleRegister(profile, role || 'client');
+  } else {
+    await finishGoogleLogin(profile);
+  }
+  return true;
 }
 
 let registerGoogleIdToken = null;
@@ -529,24 +603,15 @@ async function handleGoogleRegisterClick() {
   btn.disabled = true;
   let profile;
   try {
-    profile = await googleAuthProfile();
+    profile = await googleAuthProfile('register');
   } catch (err) {
     errorEl.textContent = err.message;
     btn.disabled = false;
     return;
   }
-  if (!profile) { btn.disabled = false; return; } // popup cancelado
-  prefillRegisterFromGoogle(profile);
+  if (!profile) { btn.disabled = false; return; } // popup cancelado, ou redirecionou (mobile) — nada mais a fazer aqui
+  await applyGoogleProfileToRegisterForm(profile, selectedRole);
   btn.disabled = false;
-  // Cliente não tem nenhum campo obrigatório além de nome/e-mail/termos —
-  // um clique no Google já basta pra completar o cadastro. Prestador
-  // precisa preencher CPF/CNPJ, endereço e categorias antes, então só
-  // pré-preenche e espera o clique em "Criar conta" (doRegister cuida do
-  // próprio estado de disabled/texto do botão a partir daqui, por isso
-  // reaproveitamos ele passando o mesmo botão do Google).
-  if (selectedRole === 'client') {
-    await doRegister(btn);
-  }
 }
 
 function openComingSoon(feature) {
@@ -4885,15 +4950,22 @@ function enterGuestMode() {
   enterApp();
 }
 
-const resetTokenParam = bootParams.get('reset');
-if (resetTokenParam) {
-  openResetPassword(resetTokenParam);
-} else if (token && user) {
-  enterApp();
-} else {
-  const cadastroParam = bootParams.get('cadastro');
-  if (cadastroParam === 'prestador') openRegister('provider');
-  else if (cadastroParam === 'cliente') openRegister('client');
-  else if (bootParams.get('login') === '1') goToLogin();
-  else enterGuestMode();
-}
+// Se a página acabou de voltar de um signInWithRedirect do Google (login
+// mobile — ver googleAuthProfile), termina esse fluxo primeiro e pula o
+// boot normal; senão segue a lógica de sempre.
+(async function boot() {
+  if (await handleGoogleRedirectResult()) return;
+
+  const resetTokenParam = bootParams.get('reset');
+  if (resetTokenParam) {
+    openResetPassword(resetTokenParam);
+  } else if (token && user) {
+    enterApp();
+  } else {
+    const cadastroParam = bootParams.get('cadastro');
+    if (cadastroParam === 'prestador') openRegister('provider');
+    else if (cadastroParam === 'cliente') openRegister('client');
+    else if (bootParams.get('login') === '1') goToLogin();
+    else enterGuestMode();
+  }
+})();
