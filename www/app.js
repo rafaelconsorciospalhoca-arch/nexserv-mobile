@@ -485,12 +485,9 @@ async function googleAuthProfile(intent) {
   }
 
   let result;
-  console.log('[google-login] chamando signInWithPopup...'); // DEBUG temporário
   try {
     result = await window.__signInWithPopup(auth, new window.__GoogleAuthProvider());
-    console.log('[google-login] signInWithPopup resolveu'); // DEBUG temporário
   } catch (err) {
-    console.error('[google-login] signInWithPopup rejeitou:', err.code, err.message); // DEBUG temporário
     if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') return null;
     throw new Error('Não foi possível entrar com o Google. Tente novamente.');
   }
@@ -545,15 +542,11 @@ async function handleGoogleLoginClick() {
   const errorEl = document.getElementById('login-error');
   errorEl.textContent = '';
   btn.disabled = true;
-  console.log('[google-login] clique recebido, IS_MOBILE_WEB =', IS_MOBILE_WEB); // DEBUG temporário
   try {
     const profile = await googleAuthProfile('login');
-    console.log('[google-login] googleAuthProfile devolveu', profile); // DEBUG temporário
     if (!profile) { btn.disabled = false; return; } // popup cancelado, ou redirecionou (mobile) — nada mais a fazer aqui
     await finishGoogleLogin(profile);
-    console.log('[google-login] finishGoogleLogin terminou'); // DEBUG temporário
   } catch (err) {
-    console.error('[google-login] erro capturado:', err); // DEBUG temporário
     errorEl.textContent = err.message;
   } finally {
     btn.disabled = false;
