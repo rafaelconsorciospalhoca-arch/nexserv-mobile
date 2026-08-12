@@ -1,4 +1,10 @@
 ext {
+    // Sem isso, o plugin @capacitor-firebase/authentication compila as
+    // dependências do Google Sign-In como "compileOnly" (não entram de
+    // verdade no APK) — o seletor de conta do Android ainda abre (é UI do
+    // sistema), mas o SDK trava depois de escolher a conta porque as
+    // classes de credencial não existem em tempo de execução.
+    rgcfaIncludeGoogle = true
     minSdkVersion = 24
     compileSdkVersion = 36
     targetSdkVersion = 36
