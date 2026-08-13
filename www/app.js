@@ -4324,11 +4324,17 @@ async function openChatThread(requestId, otherId, otherName) {
     // pagar pelo app (dinheiro só sai da custódia depois do serviço
     // concluído e aprovado), não combinar pagamento por fora com o prestador.
     document.getElementById('chat-payment-notice').style.display = (r.status === 'accepted' && user.role === 'client') ? 'flex' : 'none';
-    document.getElementById('chat-on-my-way-btn').style.display =
+    const onMyWayBtn = document.getElementById('chat-on-my-way-btn');
+    onMyWayBtn.style.display =
       (user.role === 'provider' && ['accepted', 'in_progress'].includes(r.status) && !r.on_my_way_sent_at) ? 'block' : 'none';
+    onMyWayBtn.disabled = false;
+    onMyWayBtn.textContent = '🚗 Estou indo';
   } else {
     document.getElementById('chat-payment-notice').style.display = 'none';
-    document.getElementById('chat-on-my-way-btn').style.display = 'none';
+    const onMyWayBtn = document.getElementById('chat-on-my-way-btn');
+    onMyWayBtn.style.display = 'none';
+    onMyWayBtn.disabled = false;
+    onMyWayBtn.textContent = '🚗 Estou indo';
   }
 
   const body = document.getElementById('chat-body');
