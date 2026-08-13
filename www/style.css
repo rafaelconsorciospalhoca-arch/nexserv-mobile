@@ -296,6 +296,12 @@ h1,h2,h3,h4{margin:0;font-weight:700;letter-spacing:-.01em;}
 .pro-promo-banner .txt span{font-size:12px;color:var(--ink-soft);line-height:1.4;display:block;margin-bottom:8px;}
 .pro-promo-banner .txt button{background:var(--purple);color:#fff;border:none;border-radius:9px;padding:8px 14px;font-weight:700;font-size:12.5px;cursor:pointer;}
 
+.pro-promo-banner.gold{
+  background:linear-gradient(135deg,var(--warning-tint),var(--card));
+  border-color:var(--warning);
+}
+.pro-promo-banner.gold .txt button{background:var(--warning);}
+
 .upload-box.filled{border-color:var(--success);color:var(--success-ink);background:var(--success-tint);}
 .pro-scroll{display:grid;grid-auto-flow:column;grid-template-rows:repeat(2,auto);gap:12px;overflow-x:auto;padding-bottom:4px;}
 .pro-scroll::-webkit-scrollbar{height:0;}

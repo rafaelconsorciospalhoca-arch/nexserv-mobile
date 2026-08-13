@@ -3309,7 +3309,7 @@ async function loadSubscriptionPromoBanner() {
     const status = await api('/provider/subscription/status');
     if (status.active) { el.innerHTML = ''; return; }
     el.innerHTML = `
-      <div class="pro-promo-banner">
+      <div class="pro-promo-banner gold">
         <span class="icon">⭐</span>
         <div class="txt">
           <strong>Vire PRO e apareça primeiro</strong>
