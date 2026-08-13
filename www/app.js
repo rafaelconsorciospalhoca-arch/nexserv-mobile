@@ -3416,9 +3416,14 @@ async function submitVerification() {
   const originalBtnText = btn.textContent;
   btn.textContent = 'Enviando...';
   try {
-    [documentFile, selfieFile, diplomaFile, criminalRecordFile] = await Promise.all([
-      compressImage(documentFile), compressImage(selfieFile), compressImage(diplomaFile), compressImage(criminalRecordFile),
-    ]);
+    // Comprime uma foto de cada vez (não em paralelo) — decodificar várias
+    // fotos de câmera em resolução original ao mesmo tempo (12MP+ cada) pode
+    // estourar a memória do WebView em celulares mais fracos e derrubar o
+    // app sem nenhum erro na tela.
+    documentFile = await compressImage(documentFile);
+    selfieFile = await compressImage(selfieFile);
+    diplomaFile = await compressImage(diplomaFile);
+    criminalRecordFile = await compressImage(criminalRecordFile);
 
     const fd = new FormData();
     if (documentFile) fd.append('document', documentFile);
