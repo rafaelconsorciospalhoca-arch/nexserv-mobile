@@ -4326,7 +4326,7 @@ async function openChatThread(requestId, otherId, otherName) {
     document.getElementById('chat-payment-notice').style.display = (r.status === 'accepted' && user.role === 'client') ? 'flex' : 'none';
     const onMyWayBtn = document.getElementById('chat-on-my-way-btn');
     onMyWayBtn.style.display =
-      (user.role === 'provider' && ['accepted', 'in_progress'].includes(r.status) && !r.on_my_way_sent_at) ? 'block' : 'none';
+      (user.role === 'provider' && r.provider_id === user.id && ['accepted', 'in_progress'].includes(r.status) && !r.on_my_way_sent_at) ? 'block' : 'none';
     onMyWayBtn.disabled = false;
     onMyWayBtn.textContent = '🚗 Estou indo';
   } else {
@@ -4373,16 +4373,26 @@ async function remindProviderSlow() {
 // backend já trava reenvio (on_my_way_sent_at), aqui é só refletir na tela.
 async function sendOnMyWay() {
   if (!currentChat) return;
+  const reqId = currentChat.requestId;
   const btn = document.getElementById('chat-on-my-way-btn');
   btn.disabled = true;
   btn.textContent = 'Avisando...';
   try {
-    await api(`/requests/${currentChat.requestId}/on-my-way`, { method: 'POST' });
+    await api(`/requests/${reqId}/on-my-way`, { method: 'POST' });
+    if (currentChat?.requestId !== reqId) return;
     btn.style.display = 'none';
   } catch (err) {
+    if (currentChat?.requestId !== reqId) return;
     alert(err.message);
-    btn.disabled = false;
-    btn.textContent = '🚗 Estou indo';
+    if (err instanceof TypeError) {
+      // Falha de rede/conexão — vale tentar de novo.
+      btn.disabled = false;
+      btn.textContent = '🚗 Estou indo';
+    } else {
+      // Servidor respondeu (403/409/etc) — o estado já está resolvido no
+      // servidor, reenviar não vai adiantar nada.
+      btn.style.display = 'none';
+    }
   }
 }
 
