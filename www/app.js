@@ -4324,8 +4324,11 @@ async function openChatThread(requestId, otherId, otherName) {
     // pagar pelo app (dinheiro só sai da custódia depois do serviço
     // concluído e aprovado), não combinar pagamento por fora com o prestador.
     document.getElementById('chat-payment-notice').style.display = (r.status === 'accepted' && user.role === 'client') ? 'flex' : 'none';
+    document.getElementById('chat-on-my-way-btn').style.display =
+      (user.role === 'provider' && ['accepted', 'in_progress'].includes(r.status) && !r.on_my_way_sent_at) ? 'block' : 'none';
   } else {
     document.getElementById('chat-payment-notice').style.display = 'none';
+    document.getElementById('chat-on-my-way-btn').style.display = 'none';
   }
 
   const body = document.getElementById('chat-body');
@@ -4357,6 +4360,23 @@ async function remindProviderSlow() {
     alert(err.message);
     btn.disabled = false;
     btn.textContent = '🔔 Cutucar';
+  }
+}
+
+// Prestador avisa que está a caminho — some depois de um clique só, o
+// backend já trava reenvio (on_my_way_sent_at), aqui é só refletir na tela.
+async function sendOnMyWay() {
+  if (!currentChat) return;
+  const btn = document.getElementById('chat-on-my-way-btn');
+  btn.disabled = true;
+  btn.textContent = 'Avisando...';
+  try {
+    await api(`/requests/${currentChat.requestId}/on-my-way`, { method: 'POST' });
+    btn.style.display = 'none';
+  } catch (err) {
+    alert(err.message);
+    btn.disabled = false;
+    btn.textContent = '🚗 Estou indo';
   }
 }
 
