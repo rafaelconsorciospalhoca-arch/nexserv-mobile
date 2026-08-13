@@ -501,10 +501,10 @@
       </div>
       <div class="field"><label>CEP</label><input id="instant-addr-zip" placeholder="00000000" oninput="autoFillCep(this.value, 'instant-checkout')"></div>
       <div style="display:flex;gap:10px;">
-        <div class="field" style="flex:1;"><label>Bairro</label><input id="instant-addr-neighborhood"></div>
-        <div class="field" style="flex:1;"><label>Cidade</label><input id="instant-addr-city"></div>
+        <div class="field" style="flex:2;"><label>Bairro</label><input id="instant-addr-neighborhood"></div>
+        <div class="field" style="flex:2;"><label>Cidade</label><input id="instant-addr-city"></div>
+        <div class="field" style="flex:1;"><label>UF</label><input id="instant-addr-state" maxlength="2" placeholder="PR" style="text-transform:uppercase;"></div>
       </div>
-      <input type="hidden" id="instant-addr-state">
       <div class="field"><label>Observações (opcional)</label><textarea id="instant-addr-description" rows="4" placeholder="Ex: apartamento 302, portão azul, tem cachorro..."></textarea></div>
       <button class="btn btn-primary btn-block" onclick="goToInstantPaymentScreen()">Continuar para pagamento</button>
       <div class="error-msg" id="instant-addr-error"></div>

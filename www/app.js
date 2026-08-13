@@ -1902,8 +1902,8 @@ function goToInstantPaymentScreen() {
   errorEl.textContent = '';
   const neighborhood = document.getElementById('instant-addr-neighborhood').value.trim();
   const city = document.getElementById('instant-addr-city').value.trim();
-  const state = document.getElementById('instant-addr-state').value.trim();
-  if (!neighborhood || !city) { errorEl.textContent = 'Informe bairro e cidade.'; return; }
+  const state = document.getElementById('instant-addr-state').value.trim().toUpperCase();
+  if (!neighborhood || !city || !state) { errorEl.textContent = 'Informe bairro, cidade e UF.'; return; }
 
   const selectedVariations = selectedInstantVariations();
   const unitPrice = selectedVariations.length
