@@ -26,6 +26,12 @@
 	<string>Usamos sua localização pra sugerir sua cidade e mostrar prestadores perto de você.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>Usamos sua localização pra sugerir sua cidade e mostrar prestadores perto de você.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Usamos a câmera pra você tirar fotos de documentos, selfie de verificação, fotos do serviço e do seu portfólio.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Usamos sua galeria de fotos pra você anexar fotos de documentos, do serviço e do seu portfólio.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Usamos sua galeria de fotos pra salvar imagens durante o uso do app.</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>
