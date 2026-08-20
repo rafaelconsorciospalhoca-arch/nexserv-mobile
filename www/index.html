@@ -6,7 +6,7 @@
 <title>NEXSERV — Entrar ou cadastrar</title>
 <meta name="description" content="Entre na sua conta NEXSERV ou cadastre-se como cliente ou prestador de serviços.">
 <link rel="icon" type="image/png" href="logo-icon.png">
-<link rel="manifest" href="manifest.json">
+<link rel="manifest" href="/app/manifest.json">
 <meta name="theme-color" content="#22C55E">
 <link rel="apple-touch-icon" href="icon-192.png">
 <link rel="stylesheet" href="style.css?v=20260810c">
@@ -227,7 +227,7 @@
 
       <button class="btn btn-primary btn-block" onclick="doRegister(this)">Criar conta</button>
       <div class="error-msg" id="register-error"></div>
-      <button type="button" class="btn btn-ghost btn-block" id="how-it-works-btn" style="display:none;margin-top:10px;" onclick="openHowItWorks('register')">💰 Como funciona a comissão e as taxas</button>
+      <button type="button" class="btn btn-ghost btn-block" id="how-it-works-btn" style="display:none;margin-top:10px;" onclick="openHowItWorks('register')">💰 Como funciona a taxa da NEXSERV e as moedas</button>
       </div>
     </div>
   </section>
@@ -286,11 +286,6 @@
         </div>
       </div>
 
-      <div id="home-instant-services-section" style="display:none;">
-        <div class="section-title" style="margin-top:0;"><h3>Serviços com preço fechado <span class="badge-instant">Contrate na hora!</span></h3><span class="see-all" onclick="openInstantServicesScreen()">Ver todos <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 18l6-6-6-6"/></svg></span></div>
-        <div class="svc-scroll" id="home-instant-services"></div>
-      </div>
-
       <div id="home-banner-top"></div>
 
       <div class="section-title"><h3>Categorias</h3><span class="see-all" onclick="openSearchScreen()">Ver todas <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 18l6-6-6-6"/></svg></span></div>
@@ -299,7 +294,7 @@
       <div class="section-title"><h3>Como funciona?</h3></div>
       <div class="how-it-works-row" id="how-it-works-row"></div>
 
-      <div class="section-title"><h3>Profissionais em destaque</h3><span class="see-all" onclick="allProvidersCategory=null;allProvidersOnlyFixedPrice=false;showScreen('all-providers')">Ver todos <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 18l6-6-6-6"/></svg></span></div>
+      <div class="section-title"><h3>Profissionais em destaque</h3><span class="see-all" onclick="allProvidersCategory=null;showScreen('all-providers')">Ver todos <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 18l6-6-6-6"/></svg></span></div>
       <div class="pro-scroll" id="featured-providers"></div>
 
       <div id="home-banner-bottom"></div>
@@ -382,9 +377,6 @@
         <span>🔁</span>
         <span id="req-rebook-notice-text"></span>
       </div>
-      <div id="req-view-providers-link" style="display:none;margin-bottom:12px;">
-        <button type="button" class="btn btn-ghost btn-block btn-small" onclick="viewProvidersForRequestCategory()">Ver prestadores com preço fixo nessa categoria</button>
-      </div>
       <div class="field"><label>Serviço</label><input id="req-service" type="text"></div>
       <div class="field" id="req-common-services-field" style="display:none;">
         <label>Serviços mais pedidos nessa categoria</label>
@@ -416,125 +408,6 @@
     </div>
   </section>
 
-  <!-- SERVIÇOS COM PREÇO FECHADO — VER TODOS -->
-  <section class="screen" data-screen="instant-services">
-    <div class="back-row">
-      <button class="back-btn" onclick="showScreen(homeScreenId())">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
-      </button>
-      <h2>Preço fechado</h2>
-    </div>
-    <div style="padding:14px 20px 0;">
-      <div class="search-filter-row">
-        <div class="search-box">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--ink-faint)" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3-3"/></svg>
-          <input type="text" id="instant-services-search" placeholder="Buscar serviço..." oninput="filterInstantServices(this.value)">
-        </div>
-      </div>
-      <div class="filter-tabs" id="instant-services-category-tabs"></div>
-    </div>
-    <div class="screen-scroll">
-      <div class="svc-grid" id="instant-services-list"></div>
-    </div>
-  </section>
-
-  <!-- SERVIÇOS COM PREÇO FECHADO — DETALHE -->
-  <section class="screen" data-screen="instant-service-detail">
-    <div class="back-row">
-      <button class="back-btn" onclick="showScreen('instant-services')">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
-      </button>
-      <h2 id="instant-detail-header">Serviço</h2>
-    </div>
-    <div class="screen-scroll">
-      <div id="instant-detail-image-wrap" style="display:none;"><img id="instant-detail-image" style="width:100%;border-radius:14px;display:block;margin-bottom:14px;" loading="lazy"></div>
-      <div style="font-size:11.5px;color:var(--primary);font-weight:700;text-transform:uppercase;letter-spacing:.03em;" id="instant-detail-category"></div>
-      <h2 style="margin:4px 0 6px;" id="instant-detail-name"></h2>
-      <p style="font-size:13px;color:var(--ink-soft);" id="instant-detail-short"></p>
-      <div class="pay-summary" style="margin:14px 0;">
-        <div class="pay-total-label">Valor</div>
-        <div class="pay-total" id="instant-detail-price">R$ 0,00</div>
-        <div style="font-size:12px;color:var(--ink-soft);margin-top:2px;display:none;" id="instant-detail-unit-price"></div>
-        <div style="font-size:12px;color:var(--ink-soft);margin-top:6px;" id="instant-detail-duration"></div>
-      </div>
-      <div id="instant-detail-variations-field" class="field" style="display:none;">
-        <label id="instant-detail-variations-label">Selecione um ou mais (mínimo 1)</label>
-        <div class="chip-select" id="instant-detail-variations"></div>
-        <p id="instant-detail-variations-fallback" style="display:none;font-size:12.5px;margin-top:6px;">
-          Não sabe qual opção escolher? <span class="link-btn" style="font-size:12.5px;" onclick="preferOrcamentoForInstantService()">Prefiro pedir orçamento</span>
-        </p>
-      </div>
-      <div class="field">
-        <label>Quantidade</label>
-        <div class="qty-stepper">
-          <button type="button" onclick="decrementInstantQuantity()">−</button>
-          <span id="instant-detail-quantity">1</span>
-          <button type="button" onclick="incrementInstantQuantity()">+</button>
-        </div>
-      </div>
-      <p style="font-size:13.5px;white-space:pre-line;" id="instant-detail-description"></p>
-      <div id="instant-detail-included-wrap" style="display:none;">
-        <div class="section-title" style="margin:16px 0 8px;"><h3 style="font-size:14px;">O que está incluso</h3></div>
-        <ul class="check-list" id="instant-detail-included"></ul>
-      </div>
-      <div id="instant-detail-excluded-wrap" style="display:none;">
-        <div class="section-title" style="margin:16px 0 8px;"><h3 style="font-size:14px;">O que não está incluso</h3></div>
-        <ul class="check-list excluded" id="instant-detail-excluded"></ul>
-      </div>
-      <button class="btn btn-primary btn-block" style="margin-top:18px;" onclick="startInstantCheckout()">Contratar agora</button>
-      <p style="text-align:center;font-size:11px;color:var(--ink-faint);margin-top:10px;">Pagamento seguro pela NEXSERV. Buscamos um profissional disponível pra você assim que o pagamento for confirmado.</p>
-    </div>
-  </section>
-
-  <!-- SERVIÇOS COM PREÇO FECHADO — ENDEREÇO/OBSERVAÇÕES -->
-  <section class="screen" data-screen="instant-checkout-address">
-    <div class="back-row">
-      <button class="back-btn" onclick="showScreen('instant-service-detail')">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
-      </button>
-      <h2>Onde é o serviço?</h2>
-    </div>
-    <div class="screen-scroll">
-      <div class="pay-summary" style="margin-bottom:16px;">
-        <div class="pay-total-label" id="instant-addr-service-name"></div>
-        <div class="pay-total" id="instant-addr-price">R$ 0,00</div>
-      </div>
-      <div class="field"><label>CEP</label><input id="instant-addr-zip" placeholder="00000000" oninput="autoFillCep(this.value, 'instant-checkout')"></div>
-      <div style="display:flex;gap:10px;">
-        <div class="field" style="flex:2;"><label>Bairro</label><input id="instant-addr-neighborhood"></div>
-        <div class="field" style="flex:2;"><label>Cidade</label><input id="instant-addr-city"></div>
-        <div class="field" style="flex:1;"><label>UF</label><input id="instant-addr-state" maxlength="2" placeholder="PR" style="text-transform:uppercase;"></div>
-      </div>
-      <div class="field"><label>Observações (opcional)</label><textarea id="instant-addr-description" rows="4" placeholder="Ex: apartamento 302, portão azul, tem cachorro..."></textarea></div>
-      <button class="btn btn-primary btn-block" onclick="goToInstantPaymentScreen()">Continuar para pagamento</button>
-      <div class="error-msg" id="instant-addr-error"></div>
-      <p style="text-align:center;font-size:11px;color:var(--ink-faint);margin-top:12px;">O endereço completo (rua e número) você informa depois que um profissional aceitar o serviço.</p>
-    </div>
-  </section>
-
-  <!-- SERVIÇOS COM PREÇO FECHADO — BUSCANDO PROFISSIONAL -->
-  <section class="screen" data-screen="instant-searching">
-    <div class="back-row">
-      <button class="back-btn" onclick="setTab('my-requests')">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
-      </button>
-    </div>
-    <div class="screen-scroll">
-      <div class="confirm-hero">
-        <div class="confirm-check" id="instant-searching-icon">🔎</div>
-        <h2 id="instant-searching-title">Buscando profissional...</h2>
-        <p id="instant-searching-sub">Pagamento confirmado! Estamos buscando um profissional disponível para você.</p>
-      </div>
-      <div class="summary-list">
-        <div class="summary-row"><span>Serviço</span><span id="instant-searching-service"></span></div>
-        <div class="summary-row"><span>Valor</span><span id="instant-searching-value"></span></div>
-      </div>
-      <div id="instant-searching-pix"></div>
-      <p style="text-align:center;font-size:12px;color:var(--ink-faint);margin-top:16px;">Você não precisa permanecer nesta tela — vamos te avisar por notificação, e-mail e WhatsApp assim que um profissional aceitar.</p>
-      <button class="btn btn-ghost btn-block" style="margin-top:14px;" onclick="setTab('my-requests')">Ver minhas solicitações</button>
-    </div>
-  </section>
-
   <!-- PROPOSTAS -->
   <section class="screen" data-screen="proposals">
     <div class="back-row">
@@ -560,76 +433,6 @@
       <h2>Perfil</h2>
     </div>
     <div class="screen-scroll" id="provider-view-content"></div>
-  </section>
-
-  <!-- PAGAMENTO -->
-  <section class="screen" data-screen="payment">
-    <div class="back-row">
-      <button class="back-btn" onclick="showScreen('my-requests')">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
-      </button>
-      <h2>Pagamento</h2>
-    </div>
-    <div class="screen-scroll">
-      <div class="pay-summary">
-        <div class="pay-total-label">Valor total do serviço</div>
-        <div class="pay-total" id="pay-total">R$ 0,00</div>
-        <div style="font-size:12.5px;color:var(--ink-soft);margin-top:8px;" id="pay-details"></div>
-        <div id="pay-discount-row" style="display:none;font-size:13px;color:var(--success);font-weight:700;margin-top:8px;"></div>
-        <div id="pay-credit-row" style="display:none;font-size:13px;color:var(--success);font-weight:700;margin-top:8px;"></div>
-      </div>
-
-      <div id="pay-coupon-section">
-        <div class="section-title"><h3>Cupom de desconto</h3></div>
-        <div style="display:flex;gap:8px;margin-bottom:6px;">
-          <input id="coupon-input" placeholder="Código do cupom" style="flex:1;border:1.5px solid var(--line);background:var(--card);border-radius:11px;padding:12px 14px;font-family:inherit;font-size:16px;text-transform:uppercase;">
-          <button class="btn btn-ghost" onclick="applyCoupon()">Aplicar</button>
-        </div>
-        <div class="error-msg" id="coupon-error" style="margin-top:0;margin-bottom:14px;"></div>
-      </div>
-
-      <div class="section-title"><h3>Forma de pagamento</h3></div>
-      <div class="pay-method selected" data-method="pix" onclick="selectPayMethod(this)">
-        <div class="pm-name">Pix</div>
-        <div class="pm-dot"></div>
-      </div>
-      <div class="pay-method" data-method="credit_card" onclick="selectPayMethod(this)">
-        <div class="pm-name">Cartão de crédito</div>
-        <div class="pm-dot"></div>
-      </div>
-
-      <div id="card-fields" style="display:none;">
-        <div class="field"><label>Número do cartão</label><input id="card-number" placeholder="0000 0000 0000 0000"></div>
-        <div class="field"><label>Nome no cartão</label><input id="card-holder"></div>
-        <div style="display:flex;gap:10px;">
-          <div class="field" style="flex:1;"><label>Validade (MM/AAAA)</label><input id="card-expiry" placeholder="12/2030"></div>
-          <div class="field" style="width:90px;"><label>CVV</label><input id="card-cvv" placeholder="123"></div>
-        </div>
-        <div class="field"><label>CEP</label><input id="card-zip" placeholder="00000000"></div>
-        <div class="field" id="installments-field" style="display:none;">
-          <label>Parcelamento</label>
-          <select id="installments-select" onchange="updateInstallmentsPreview()">
-            <option value="1">À vista</option>
-            <option value="2">2x</option>
-            <option value="3">3x</option>
-            <option value="4">4x</option>
-            <option value="5">5x</option>
-            <option value="6">6x</option>
-          </select>
-          <div style="font-size:12px;color:var(--ink-soft);margin-top:4px;" id="installments-preview"></div>
-        </div>
-      </div>
-
-      <div class="fee-note">
-        <span>🔒</span>
-        <span>Priorize pagar sempre pelo NEXSERV: seu dinheiro fica protegido e só é liberado ao prestador depois que o serviço for concluído e aprovado por você. Pagamento combinado fora da plataforma não tem essa proteção.</span>
-      </div>
-
-      <button class="btn btn-primary btn-block" id="confirm-payment-btn" onclick="confirmPayment()">Pagar e confirmar serviço</button>
-      <div class="error-msg" id="payment-error"></div>
-
-      <p style="text-align:center;font-size:11.5px;color:var(--ink-faint);margin-top:14px;">Pagamento processado com segurança por Asaas</p>
-    </div>
   </section>
 
   <!-- CONFIRMAÇÃO -->
@@ -862,31 +665,61 @@
     </div>
   </section>
 
-  <!-- SACAR GANHOS -->
-  <section class="screen" data-screen="provider-withdraw">
+  <!-- FATURAS DE COMISSÃO -->
+  <section class="screen" data-screen="provider-invoices">
     <div class="back-row">
       <button class="back-btn" onclick="setTab('provider-earnings')">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
       </button>
-      <h2>Sacar</h2>
+      <h2>Faturas</h2>
     </div>
     <div class="screen-scroll">
-      <div class="earnings-summary-card">
-        <div class="section-title" style="margin:0;"><h3>Saldo disponível pra saque</h3></div>
-        <p style="font-size:12px;color:var(--ink-soft);margin:4px 0 0;">Já descontando saques em andamento.</p>
-        <div class="pay-total" id="withdraw-available" style="margin-top:8px;">R$ 0,00</div>
+      <div id="provider-invoices-list"></div>
+    </div>
+  </section>
+
+  <section class="screen" data-screen="client-wallet">
+    <div class="back-row">
+      <button class="back-btn" onclick="setTab('profile')">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <h2>Minhas moedas</h2>
+    </div>
+    <div class="screen-scroll">
+      <div class="coin-promo-banner">
+        <strong>Moedas NEXSERV</strong>
+        <p>Use suas moedas pra desbloquear orçamentos extras que chegaram no seu pedido.</p>
+        <div class="stat-grid">
+          <div class="stat-box" style="background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.15);">
+            <div class="num" id="client-coins-balance" style="color:#fff;">0</div><div class="lab" style="color:#D8CBAE;">Moedas disponíveis</div>
+          </div>
+        </div>
       </div>
 
-      <div class="fee-note">
-        <span>⚡</span>
-        <span>Pagamento automático: assim que o cliente aprova a conclusão, seu pagamento via Pix já é encaminhado — cai na sua chave Pix logo após a aprovação da administração. Pagamento no cartão de crédito demora um pouco mais (até 2 dias úteis) porque o valor só fica disponível depois que a operadora do cartão libera.</span>
+      <div class="section-title"><h3>Comprar moedas</h3></div>
+      <div id="client-coin-packages"></div>
+
+      <div id="client-coin-payment-form" style="display:none;">
+        <div class="section-title"><h3>Forma de pagamento</h3></div>
+        <div class="pay-method selected" data-method="pix" onclick="selectClientCoinPayMethod(this)">
+          <div class="pm-name">Pix</div><div class="pm-dot"></div>
+        </div>
+        <div class="pay-method" data-method="credit_card" onclick="selectClientCoinPayMethod(this)">
+          <div class="pm-name">Cartão de crédito</div><div class="pm-dot"></div>
+        </div>
+        <div id="client-coin-card-fields" style="display:none;">
+          <div class="field"><label>Número do cartão</label><input id="client-coin-card-number" placeholder="0000 0000 0000 0000"></div>
+          <div class="field"><label>Nome no cartão</label><input id="client-coin-card-holder"></div>
+          <div style="display:flex;gap:10px;">
+            <div class="field" style="flex:1;"><label>Validade (MM/AAAA)</label><input id="client-coin-card-expiry" placeholder="12/2030"></div>
+            <div class="field" style="width:90px;"><label>CVV</label><input id="client-coin-card-cvv" placeholder="123"></div>
+          </div>
+          <div class="field"><label>CEP</label><input id="client-coin-card-zip" placeholder="00000000"></div>
+        </div>
+        <button class="btn btn-primary btn-block" onclick="confirmClientCoinPurchase()">Comprar</button>
+        <div id="client-coin-qr-container"></div>
+        <div class="error-msg" id="client-coin-purchase-error"></div>
       </div>
-
-      <div id="bank-account-section"></div>
-      <div id="withdraw-form-section" style="display:none;"></div>
-
-      <div class="section-title"><h3>Histórico de saques</h3></div>
-      <div id="withdrawals-history"></div>
     </div>
   </section>
 
@@ -914,6 +747,14 @@
         <div class="txt"><strong>Destaque automático</strong><span>Seu perfil sempre em destaque na home, sem gastar moedas</span></div>
       </div>
       <div class="list-item">
+        <div class="icon" style="background:var(--purple-tint);color:var(--purple);">🪙</div>
+        <div class="txt"><strong>10% de desconto na compra de moedas</strong><span>Todo pacote de moedas sai mais barato pra assinante</span></div>
+      </div>
+      <div class="list-item">
+        <div class="icon" style="background:var(--purple-tint);color:var(--purple);">🕐</div>
+        <div class="txt"><strong>Acesso antecipado a pedidos novos</strong><span>Veja pedidos novos na hora — quem não é assinante só vê alguns minutos depois</span></div>
+      </div>
+      <div class="list-item">
         <div class="icon" style="background:var(--purple-tint);color:var(--purple);">🚀</div>
         <div class="txt"><strong>Prioridade nos orçamentos</strong><span>Suas propostas aparecem primeiro pro cliente</span></div>
       </div>
@@ -922,12 +763,12 @@
         <div class="txt"><strong>Aviso instantâneo</strong><span>Pedido novo na sua categoria chega direto no seu WhatsApp, na hora</span></div>
       </div>
       <div class="list-item">
-        <div class="icon" style="background:var(--purple-tint);color:var(--purple);">📞</div>
-        <div class="txt"><strong>Contato do cliente liberado</strong><span>Telefone liberado automaticamente após o pagamento — até 15 contatos grátis por mês; depois disso, 100 moedas por contato extra</span></div>
+        <div class="icon" style="background:var(--purple-tint);color:var(--purple);">🔔</div>
+        <div class="txt"><strong>Cobrar decisão do cliente</strong><span>Um clique pra lembrar o cliente quando sua proposta fica parada</span></div>
       </div>
       <div class="list-item">
-        <div class="icon" style="background:var(--purple-tint);color:var(--purple);">💬</div>
-        <div class="txt"><strong>Chat liberado</strong><span>Converse com qualquer cliente depois da proposta, sem pagar moedas por conversa</span></div>
+        <div class="icon" style="background:var(--purple-tint);color:var(--purple);">📞</div>
+        <div class="txt"><strong>Contato do cliente liberado</strong><span>10 liberações grátis por ciclo de 30 dias; depois disso, o custo normal em moedas do serviço</span></div>
       </div>
       <div class="list-item">
         <div class="icon" style="background:var(--purple-tint);color:var(--purple);">📸</div>
@@ -936,10 +777,6 @@
       <div class="list-item">
         <div class="icon" style="background:var(--purple-tint);color:var(--purple);">🖼️</div>
         <div class="txt"><strong>Troca de foto de perfil na hora</strong><span>Sua nova foto entra no ar na hora, sem passar pela fila de aprovação</span></div>
-      </div>
-      <div class="list-item">
-        <div class="icon" style="background:var(--purple-tint);color:var(--purple);">🔔</div>
-        <div class="txt"><strong>Cobrar decisão do cliente</strong><span>Um clique pra lembrar o cliente quando sua proposta fica parada</span></div>
       </div>
       <div class="list-item">
         <div class="icon" style="background:var(--purple-tint);color:var(--purple);">💰</div>
@@ -1130,22 +967,25 @@
 
       <div class="role-toggle">
         <button type="button" class="active" id="earnings-tab-summary" onclick="setEarningsTab('summary')">Ganhos</button>
-        <button type="button" id="earnings-tab-dre" onclick="setEarningsTab('dre')">Financeiro</button>
+        <button type="button" id="earnings-tab-dre" onclick="setEarningsTab('dre')">DRE</button>
         <button type="button" id="earnings-tab-wallet" onclick="setEarningsTab('wallet')">Carteira</button>
       </div>
 
       <div id="earnings-summary-pane">
-        <div class="earnings-summary-card">
-          <div class="section-title" style="margin:0;"><h3>Resumo de ganhos</h3></div>
-          <p style="font-size:12px;color:var(--ink-soft);margin:4px 0 0;">Valores ficam retidos até você marcar como entregue e o cliente aprovar.</p>
-          <div class="grid3">
-            <div><div class="g-lab">Liberado</div><div class="g-val" id="earnings-released">R$ 0</div></div>
-            <div><div class="g-lab">Retido</div><div class="g-val" id="earnings-held">R$ 0</div></div>
+        <div id="earnings-summary-upsell" style="display:none;"></div>
+        <div id="earnings-summary-content">
+          <div class="earnings-summary-card">
+            <div class="section-title" style="margin:0;"><h3>Resumo de ganhos</h3></div>
+            <p style="font-size:12px;color:var(--ink-soft);margin:4px 0 0;">Valores ficam retidos até você marcar como entregue e o cliente aprovar.</p>
+            <div class="grid3">
+              <div><div class="g-lab">Liberado</div><div class="g-val" id="earnings-released">R$ 0</div></div>
+              <div><div class="g-lab">Retido</div><div class="g-val" id="earnings-held">R$ 0</div></div>
+            </div>
           </div>
+          <button class="btn btn-primary btn-block" style="margin:14px 0;" onclick="showScreen('provider-invoices')">🧾 Ver faturas</button>
+          <div class="section-title"><h3>Extrato</h3></div>
+          <div id="earnings-list"></div>
         </div>
-        <button class="btn btn-primary btn-block" style="margin:14px 0;" onclick="showScreen('provider-withdraw')">💵 Sacar meus ganhos</button>
-        <div class="section-title"><h3>Extrato</h3></div>
-        <div id="earnings-list"></div>
       </div>
 
       <div id="dre-pane" style="display:none;">
@@ -1232,9 +1072,9 @@
         </div>
 
         <div class="section-title"><h3>Mais opções</h3></div>
-        <div class="list-item" onclick="showScreen('provider-withdraw')">
-          <div class="icon" style="background:var(--success-tint);color:var(--success);">💵</div>
-          <div class="txt"><strong>Sacar</strong><span>Transferir seus ganhos para sua conta bancária</span></div>
+        <div class="list-item" onclick="showScreen('provider-invoices')">
+          <div class="icon" style="background:var(--success-tint);color:var(--success);">🧾</div>
+          <div class="txt"><strong>Faturas</strong><span>Cobranças da taxa da NEXSERV</span></div>
           <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
         </div>
         <div class="list-item" onclick="showScreen('provider-subscription'); loadSubscriptionStatus();">
@@ -1405,7 +1245,6 @@
       <div id="all-providers-sort-wrap" style="display:none;margin-bottom:12px;">
         <select id="all-providers-sort" onchange="renderAllProvidersScreen()">
           <option value="">Ordenar por destaque</option>
-          <option value="price">Ordenar por menor preço</option>
         </select>
       </div>
       <div id="all-providers-fallback-link" style="display:none;margin-bottom:12px;"></div>
@@ -1502,8 +1341,13 @@
       </p>
       <p style="font-size:13px;color:var(--ink-soft);line-height:1.6;">
         O NEXSERV é uma plataforma mediada: o pagamento fica retido até a conclusão do serviço ser aprovada pelo Cliente, e a plataforma
-        intermedeia eventuais divergências conforme a seção 9 destes Termos. Sob esse modelo, o NEXSERV não é prestador dos serviços
+        intermedeia eventuais divergências conforme a seção 11 destes Termos. Sob esse modelo, o NEXSERV não é prestador dos serviços
         contratados, mas atua como intermediário financeiro e gestor da confiança entre as partes.
+      </p>
+      <p style="font-size:13px;color:var(--ink-soft);line-height:1.6;">
+        Além da intermediação de pedidos com pagamento pelo aplicativo (itens acima), o NEXSERV também opera um sistema de moedas:
+        Prestadores podem usar moedas para liberar o contato direto do Cliente antes mesmo de haver pagamento pelo serviço, para destacar
+        propostas, e para assinar o Plano PRO — mecanismos detalhados nas seções 6, 7 e 9.
       </p>
       <p style="font-size:13px;color:var(--ink-soft);line-height:1.6;">
         Ao se cadastrar e utilizar a Plataforma, o Usuário declara ter lido, compreendido e aceitado integralmente estes Termos e a
@@ -1548,7 +1392,8 @@
       <p style="font-size:13px;color:var(--ink-soft);line-height:1.6;">
         <strong>5.b Propostas dos Prestadores:</strong> Prestadores interessados enviam proposta com valor e disponibilidade. Diferente de um
         catálogo de preço fixo, o NEXSERV funciona por cotação: o Cliente pode receber e comparar propostas de mais de um Prestador antes de
-        decidir.
+        decidir. O envio de orçamento é gratuito e sem limite de quantos Prestadores podem participar. Já a liberação do contato direto do
+        Cliente é um mecanismo separado, pago em moedas e limitado a um número máximo de Prestadores por pedido — ver seção 6.
       </p>
       <p style="font-size:13px;color:var(--ink-soft);line-height:1.6;">
         <strong>5.c Aceite e pagamento:</strong> ao aceitar uma proposta, as demais são automaticamente recusadas. O Cliente então realiza o
@@ -1556,17 +1401,60 @@
       </p>
       <p style="font-size:13px;color:var(--ink-soft);line-height:1.6;">
         <strong>5.d Conclusão e liberação:</strong> concluído o serviço, o Cliente aprova a entrega pelo aplicativo, o que libera o repasse ao
-        Prestador, descontada a comissão da Plataforma. Contato telefônico direto entre Cliente e Prestador só é liberado após o pagamento
-        ser confirmado — antes disso, a comunicação deve ocorrer pelo chat da Plataforma (ver seção 13).
+        Prestador, descontada a comissão da Plataforma. Nos pedidos pagos pelo aplicativo, o contato telefônico direto entre Cliente e
+        Prestador é liberado após o pagamento ser confirmado — antes disso, a comunicação deve ocorrer pelo chat da Plataforma (ver seção 15).
+        O Prestador também pode liberar o contato do Cliente a qualquer momento pagando em moedas, independentemente do pagamento do serviço
+        pelo aplicativo — ver seção 6.
       </p>
 
-      <p style="font-size:13.5px;font-weight:700;color:var(--ink);margin:16px 0 4px;">6. Privacidade da informação</p>
+      <p style="font-size:13.5px;font-weight:700;color:var(--ink);margin:16px 0 4px;">6. Liberação de contato entre Cliente e Prestador</p>
+      <p style="font-size:13px;color:var(--ink-soft);line-height:1.6;">
+        <strong>6.a Como funciona:</strong> o Prestador pode pagar em moedas para liberar o telefone e o e-mail do Cliente de um pedido,
+        independentemente de ter enviado orçamento ou de o pedido ter sido pago pelo aplicativo. O custo em moedas varia por categoria e tipo
+        de serviço, definido pelo NEXSERV e sempre exibido antes da confirmação.
+      </p>
+      <p style="font-size:13px;color:var(--ink-soft);line-height:1.6;">
+        <strong>6.b Limite de vagas:</strong> no máximo 4 Prestadores podem liberar o contato do mesmo pedido (número configurável pelo
+        NEXSERV). Esgotadas as vagas, o pedido sai da lista de oportunidades disponíveis para os demais Prestadores — os que já liberaram
+        continuam com acesso normal.
+      </p>
+      <p style="font-size:13px;color:var(--ink-soft);line-height:1.6;">
+        <strong>6.c Plano PRO:</strong> assinantes do Plano PRO recebem um número de liberações gratuitas por ciclo mensal (crédito). Cada
+        crédito cobre até um valor em moedas definido pelo NEXSERV; liberações mais caras que essa cobertura consomem o crédito e cobram a
+        diferença em moedas do saldo do Prestador. O valor não usado da cobertura não gera crédito nem é devolvido.
+      </p>
+      <p style="font-size:13px;color:var(--ink-soft);line-height:1.6;">
+        <strong>6.d Natureza da liberação:</strong> a liberação de contato dá acesso a uma oportunidade comercial e não representa garantia
+        de contratação do serviço pelo Cliente.
+      </p>
+
+      <p style="font-size:13.5px;font-weight:700;color:var(--ink);margin:16px 0 4px;">7. Garantia de contato</p>
+      <p style="font-size:13px;color:var(--ink-soft);line-height:1.6;">
+        <strong>7.a Quando cabe:</strong> se o telefone liberado for inválido, inexistente, ou pertencer a pessoa diferente do Cliente que
+        criou o pedido, o Prestador pode solicitar garantia em até 7 dias após a liberação (prazo configurável pelo NEXSERV).
+      </p>
+      <p style="font-size:13px;color:var(--ink-soft);line-height:1.6;">
+        <strong>7.b Como solicitar:</strong> pelo aplicativo, escolhendo um dos motivos acima e podendo detalhar em texto livre.
+      </p>
+      <p style="font-size:13px;color:var(--ink-soft);line-height:1.6;">
+        <strong>7.c Análise:</strong> as solicitações são analisadas manualmente pelo NEXSERV em até 72 horas.
+      </p>
+      <p style="font-size:13px;color:var(--ink-soft);line-height:1.6;">
+        <strong>7.d O que é devolvido:</strong> se aprovada, a moeda gasta é devolvida; se a liberação usou um crédito do Plano PRO, o
+        crédito é liberado de volta para o ciclo mensal. Não há devolução em dinheiro.
+      </p>
+      <p style="font-size:13px;color:var(--ink-soft);line-height:1.6;">
+        <strong>7.e O que não dá direito à garantia:</strong> o Cliente não responder, escolher outro Prestador, achar o valor caro, ou
+        desistir do serviço não geram direito a reembolso da liberação de contato.
+      </p>
+
+      <p style="font-size:13.5px;font-weight:700;color:var(--ink);margin:16px 0 4px;">8. Privacidade da informação</p>
       <p style="font-size:13px;color:var(--ink-soft);line-height:1.6;">
         Todos os dados pessoais fornecidos pelo Usuário são tratados conforme a
         <a onclick="openLegalScreen('privacy', legalScreenOrigin)">Política de Privacidade</a> do NEXSERV, em conformidade com a LGPD.
       </p>
 
-      <p style="font-size:13.5px;font-weight:700;color:var(--ink);margin:16px 0 4px;">7. Tarifas e comissão da Plataforma</p>
+      <p style="font-size:13.5px;font-weight:700;color:var(--ink);margin:16px 0 4px;">9. Tarifas e comissão da Plataforma</p>
       <p style="font-size:13px;color:var(--ink-soft);line-height:1.6;">
         O valor do serviço é definido livremente pelo Prestador em cada proposta. O NEXSERV retém uma comissão percentual sobre cada pedido
         pago e concluído — atualmente 12%. Prestadores fundadores aprovados durante o período promocional inicial da plataforma mantêm a
@@ -1576,22 +1464,24 @@
         no pagamento parcelado, embutida no valor total cobrado do Cliente (detalhes em Perfil &gt; Parcelamento).
       </p>
       <p style="font-size:13px;color:var(--ink-soft);line-height:1.6;">
-        O NEXSERV também oferece recursos opcionais pagos ao Prestador: assinatura do Plano PRO (destaque automático no perfil, desbloqueios
-        de contato e liberação de chat) e compra avulsa de moedas para destaque de proposta e desbloqueios pontuais. O uso desses recursos é
-        sempre opcional e seus preços ficam visíveis na Plataforma antes da compra.
+        O NEXSERV também opera um sistema de moedas, vendidas em pacotes com preço visível no aplicativo antes da compra. As moedas são
+        usadas para: liberar o contato de um Cliente (custo por categoria/serviço, ver seção 6), destacar uma proposta, e — para Clientes —
+        desbloquear orçamentos além dos gratuitos. A assinatura do Plano PRO custa R$49,90/mês e dá direito a destaque automático no perfil,
+        acesso antecipado a pedidos novos, desconto de 10% na compra de moedas, e um número mensal de liberações de contato gratuitas com
+        cobertura por valor (ver seção 6.c). O uso de todos esses recursos é sempre opcional.
       </p>
       <p style="font-size:13px;color:var(--ink-soft);line-height:1.6;">
-        É dever do Prestador conferir os valores no extrato de transações (Perfil &gt; Ganhos) e comunicar ao suporte qualquer divergência.
+        É dever do Prestador conferir os valores no extrato de transações (Perfil &gt; Financeiro &gt; Faturas) e comunicar ao suporte qualquer divergência.
       </p>
 
-      <p style="font-size:13.5px;font-weight:700;color:var(--ink);margin:16px 0 4px;">8. Emissão de nota fiscal</p>
+      <p style="font-size:13.5px;font-weight:700;color:var(--ink);margin:16px 0 4px;">10. Emissão de nota fiscal</p>
       <p style="font-size:13px;color:var(--ink-soft);line-height:1.6;">
         O NEXSERV não emite nota fiscal em nome do Prestador. Cada Prestador é responsável por suas próprias obrigações fiscais sobre os
         valores recebidos pelos serviços prestados (autônomo, MEI ou pessoa jurídica, conforme seu enquadramento), inclusive pela emissão de
         nota fiscal quando aplicável. O NEXSERV disponibiliza extrato de transações no aplicativo para apoiar essa apuração.
       </p>
 
-      <p style="font-size:13.5px;font-weight:700;color:var(--ink);margin:16px 0 4px;">9. Cancelamento e reembolso</p>
+      <p style="font-size:13.5px;font-weight:700;color:var(--ink);margin:16px 0 4px;">11. Cancelamento e reembolso</p>
       <p style="font-size:13px;color:var(--ink-soft);line-height:1.6;">
         <strong>Antes do pagamento:</strong> o Cliente pode cancelar um pedido ou recusar propostas livremente, sem custo, já que nenhum
         valor foi retido ainda.
@@ -1606,21 +1496,26 @@
         é considerado finalizado. Reclamações posteriores devem ser abertas junto ao suporte, que pode intermediar a negociação entre as
         partes, mas o reembolso deixa de ser automático.
       </p>
+      <p style="font-size:13px;color:var(--ink-soft);line-height:1.6;">
+        <strong>Moedas:</strong> moedas gastas em liberação de contato, destaque de proposta ou desbloqueio de orçamento não são
+        reembolsáveis por arrependimento — a única forma de reembolso de moeda gasta em liberação de contato é a garantia de contato
+        (seção 7), nos casos e prazos ali previstos.
+      </p>
 
-      <p style="font-size:13.5px;font-weight:700;color:var(--ink);margin:16px 0 4px;">10. Serviços e anúncios proibidos</p>
+      <p style="font-size:13.5px;font-weight:700;color:var(--ink);margin:16px 0 4px;">12. Serviços e anúncios proibidos</p>
       <p style="font-size:13px;color:var(--ink-soft);line-height:1.6;">
         É proibido anunciar na Plataforma a venda, aluguel, troca ou qualquer transferência de posse de bem móvel ou imóvel, bem como
         serviços ilegais ou ofensivos a terceiros. O NEXSERV pode excluir, unilateralmente e sem aviso prévio, quem desrespeitar essas regras.
       </p>
 
-      <p style="font-size:13.5px;font-weight:700;color:var(--ink);margin:16px 0 4px;">11. Sistema de avaliação</p>
+      <p style="font-size:13.5px;font-weight:700;color:var(--ink);margin:16px 0 4px;">13. Sistema de avaliação</p>
       <p style="font-size:13px;color:var(--ink-soft);line-height:1.6;">
         Após cada serviço concluído, o Cliente pode avaliar o Prestador. As avaliações compõem a nota pública exibida no perfil do Prestador.
         O NEXSERV pode suspender ou excluir cadastros com avaliações negativas reiteradas, e remove avaliações que contenham ofensa, assédio,
         discriminação ou conteúdo manifestamente falso.
       </p>
 
-      <p style="font-size:13.5px;font-weight:700;color:var(--ink);margin:16px 0 4px;">12. Obrigações dos Usuários</p>
+      <p style="font-size:13.5px;font-weight:700;color:var(--ink);margin:16px 0 4px;">14. Obrigações dos Usuários</p>
       <p style="font-size:13px;color:var(--ink-soft);line-height:1.6;">
         O Prestador deve ter capacidade legal para prestar o serviço ofertado e responde por todas as obrigações decorrentes da execução —
         fiscais, trabalhistas, consumeristas ou de outra natureza — nos termos do art. 30 do Código de Defesa do Consumidor e do art. 429 do
@@ -1630,23 +1525,25 @@
         O Cliente deve cooperar com o Prestador para a execução do serviço, fornecendo informações verídicas e o acesso necessário à prestação.
       </p>
 
-      <p style="font-size:13.5px;font-weight:700;color:var(--ink);margin:16px 0 4px;">13. Práticas vedadas</p>
+      <p style="font-size:13.5px;font-weight:700;color:var(--ink);margin:16px 0 4px;">15. Práticas vedadas</p>
       <p style="font-size:13px;color:var(--ink-soft);line-height:1.6;">
         É vedado aos Usuários: manipular valores de propostas de forma fraudulenta; usar dados de outros Usuários para fins comerciais ou
         ilícitos; usar robôs, crawlers ou ferramentas automatizadas para extrair dados da Plataforma; tentar burlar o funcionamento da
-        Plataforma; e, especialmente, <strong>trocar telefone, e-mail, endereço ou qualquer contato direto pelo chat antes do pagamento ser
-        confirmado</strong>, com o objetivo de contornar a intermediação financeira do pedido. Essa última prática é monitorada
-        automaticamente pela Plataforma e pode resultar em advertência ou suspensão.
+        Plataforma; e, especialmente, <strong>tentar burlar os mecanismos de intermediação da Plataforma inserindo telefone, e-mail,
+        endereço ou qualquer contato direto no chat, na descrição do pedido ou em propostas, fora dos meios que a própria Plataforma
+        disponibiliza para esse fim</strong>. O NEXSERV oferece formas próprias e pagas de liberação de contato entre Cliente e Prestador
+        (ver seções 6 e 9) — usar essas ferramentas é sempre permitido; tentar contorná-las inserindo contato diretamente em campos de texto
+        livre é monitorado automaticamente pela Plataforma e pode resultar em advertência ou suspensão.
       </p>
 
-      <p style="font-size:13.5px;font-weight:700;color:var(--ink);margin:16px 0 4px;">14. Violação do sistema</p>
+      <p style="font-size:13.5px;font-weight:700;color:var(--ink);margin:16px 0 4px;">16. Violação do sistema</p>
       <p style="font-size:13px;color:var(--ink-soft);line-height:1.6;">
         É vedado usar dispositivo, software ou recurso que interfira nas operações, contas ou bancos de dados da Plataforma. Qualquer
         tentativa nesse sentido sujeita o responsável às medidas legais cabíveis, sem prejuízo do dever de indenizar o NEXSERV ou outros
         Usuários por danos causados.
       </p>
 
-      <p style="font-size:13.5px;font-weight:700;color:var(--ink);margin:16px 0 4px;">15. Sanções</p>
+      <p style="font-size:13.5px;font-weight:700;color:var(--ink);margin:16px 0 4px;">17. Sanções</p>
       <p style="font-size:13px;color:var(--ink-soft);line-height:1.6;">
         O NEXSERV pode advertir, suspender ou excluir, temporária ou permanentemente, o cadastro do Usuário que descumprir estes Termos,
         praticar atos ilícitos, não puder ter sua identidade verificada, ou causar (ou tiver potencial de causar) dano a terceiros ou ao
@@ -1654,7 +1551,7 @@
         exclusão por fraude comprovada, o repasse pendente pode ser retido para cobertura de estornos ou reembolsos a Clientes prejudicados.
       </p>
 
-      <p style="font-size:13.5px;font-weight:700;color:var(--ink);margin:16px 0 4px;">16. Responsabilidades</p>
+      <p style="font-size:13.5px;font-weight:700;color:var(--ink);margin:16px 0 4px;">18. Responsabilidades</p>
       <p style="font-size:13px;color:var(--ink-soft);line-height:1.6;">
         O NEXSERV atua como intermediário financeiro e gestor de confiança entre Cliente e Prestador. A execução técnica do serviço é de
         responsabilidade exclusiva do Prestador, que responde pela qualidade, integridade e conformidade do serviço com o combinado. O
@@ -1667,7 +1564,7 @@
         Usuários ou a própria Plataforma.
       </p>
 
-      <p style="font-size:13.5px;font-weight:700;color:var(--ink);margin:16px 0 4px;">17. Franquias e representantes locais</p>
+      <p style="font-size:13.5px;font-weight:700;color:var(--ink);margin:16px 0 4px;">19. Franquias e representantes locais</p>
       <p style="font-size:13px;color:var(--ink-soft);line-height:1.6;">
         Em algumas cidades, o NEXSERV opera por meio de franqueados independentes, responsáveis pela operação local (verificação de
         prestadores, suporte e divulgação na região). O franqueado não é empregado, sócio ou representante legal do NEXSERV perante terceiros
@@ -1675,20 +1572,20 @@
         trabalhista ou de mandato entre o NEXSERV e qualquer Usuário.
       </p>
 
-      <p style="font-size:13.5px;font-weight:700;color:var(--ink);margin:16px 0 4px;">18. Propriedade intelectual</p>
+      <p style="font-size:13.5px;font-weight:700;color:var(--ink);margin:16px 0 4px;">20. Propriedade intelectual</p>
       <p style="font-size:13px;color:var(--ink-soft);line-height:1.6;">
         A marca NEXSERV, seu logotipo, o conteúdo das telas do aplicativo e o conjunto de sistemas, bancos de dados e programas que compõem a
         Plataforma são de propriedade do NEXSERV e protegidos pela legislação de direitos autorais e propriedade industrial. Uso indevido ou
         reprodução total ou parcial sem autorização expressa é proibido.
       </p>
 
-      <p style="font-size:13.5px;font-weight:700;color:var(--ink);margin:16px 0 4px;">19. Indenização</p>
+      <p style="font-size:13.5px;font-weight:700;color:var(--ink);margin:16px 0 4px;">21. Indenização</p>
       <p style="font-size:13px;color:var(--ink-soft);line-height:1.6;">
         O Usuário se compromete a indenizar o NEXSERV, seus sócios, colaboradores e representantes por qualquer demanda de terceiros
         decorrente de suas atividades na Plataforma, do descumprimento destes Termos ou de violação a lei ou direitos de terceiros.
       </p>
 
-      <p style="font-size:13.5px;font-weight:700;color:var(--ink);margin:16px 0 4px;">20. Legislação aplicável e foro</p>
+      <p style="font-size:13.5px;font-weight:700;color:var(--ink);margin:16px 0 4px;">22. Legislação aplicável e foro</p>
       <p style="font-size:13px;color:var(--ink-soft);line-height:1.6;">
         Estes Termos são regidos pelas leis da República Federativa do Brasil. Fica eleito o foro do domicílio do Usuário para dirimir
         eventuais controvérsias, conforme o Código de Defesa do Consumidor, quando aplicável.
@@ -1773,10 +1670,10 @@
   window.__signInWithRedirect = signInWithRedirect;
   window.__getRedirectResult = getRedirectResult;
 </script>
-<script src="app.js?v=20260810d" defer></script>
+<script src="app.js?v=20260820d" defer></script>
 <script>
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js'));
+  window.addEventListener('load', () => navigator.serviceWorker.register('/app/sw.js'));
 }
 </script>
 </body>

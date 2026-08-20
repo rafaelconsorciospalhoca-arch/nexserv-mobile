@@ -95,7 +95,6 @@ const GUEST_USER = { id: null, role: 'client', name: 'Visitante' };
 const GUEST_GATED_TABS = new Set(['my-requests', 'messages', 'profile']);
 let providerAwaitingExpansion = false;
 let selectedRole = 'client';
-let payMethod = 'pix';
 let selectedInstallments = 1;
 let installmentsEligible = false;
 const MIN_INSTALLMENT_AMOUNT = 300;
@@ -256,8 +255,10 @@ async function cacheImageToDisk(url) {
   if (!Filesystem) return;
   imageCachingInFlight.add(url);
   try {
+    console.log('[IMG] Tentando carregar:', url);
     const res = await fetch(url);
-    if (!res.ok) return;
+    console.log('[IMG] Resposta:', res.status, res.ok);
+    if (!res.ok) return imageCachingInFlight.delete(url);
     const base64 = await blobToBase64(await res.blob());
     const fileName = 'img-cache/' + btoa(url).replace(/[/+=]/g, '') + '.bin';
     await Filesystem.writeFile({ path: fileName, data: base64, directory: 'CACHE', recursive: true });
@@ -265,7 +266,8 @@ async function cacheImageToDisk(url) {
     imageDiskCache.set(url, window.Capacitor.convertFileSrc(uri));
     persistImageDiskCache();
   } catch (err) {
-    console.error('Falha ao cachear imagem em disco:', err.message);
+    imageCachingInFlight.delete(url);
+    console.error('[IMG] Erro:', err.code, err.message);
   } finally {
     imageCachingInFlight.delete(url);
   }
@@ -277,7 +279,7 @@ function imgProxy(url) {
   const cached = imageDiskCache.get(url);
   if (cached) return cached;
   cacheImageToDisk(url); // dispara em background, não trava a renderização da tela
-  return url;
+  return url; // retorna URL original mesmo se cache falhar — deixa o navegador carregar direto
 }
 function avatarSrc(u) {
   const photo = u?.photoUrl || u?.photo_url;
@@ -480,24 +482,23 @@ async function googleAuthProfile(intent) {
   const auth = window.__firebaseAuth;
   if (!auth) throw new Error('Login com Google indisponível no momento.');
 
-  // signInWithPopup é instável em navegador mobile — muitos bloqueiam o
-  // popup em silêncio (sem lançar erro nenhum pro código pegar), então o
-  // clique parece não fazer nada. No navegador mobile usa signInWithRedirect
-  // (navega a página inteira pro Google e volta) em vez de popup; guarda a
-  // intenção (login/cadastro + papel) no localStorage porque a página recarrega
-  // e perde todo o estado em memória — GOOGLE_REDIRECT_INTENT_KEY é lido de
-  // volta em handleGoogleRedirectResult() no boot da página.
-  if (IS_MOBILE_WEB) {
-    localStorage.setItem(GOOGLE_REDIRECT_INTENT_KEY, JSON.stringify({ intent, role: selectedRole }));
-    await window.__signInWithRedirect(auth, new window.__GoogleAuthProvider());
-    return null; // não deve nem chegar aqui — a navegação já deve ter acontecido
-  }
-
+  // Tenta signInWithPopup em todos os casos (desktop e mobile).
+  // Alguns navegadores mobile bloqueiam popup silenciosamente, mas se funcionar
+  // é melhor que redirect porque mantém a sessão (problema: getRedirectResult retorna null).
+  // Se popup falhar, tenta redirect como fallback no mobile.
   let result;
   try {
     result = await window.__signInWithPopup(auth, new window.__GoogleAuthProvider());
   } catch (err) {
     if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') return null;
+
+    // Popup falhou ou foi bloqueado — tenta redirect como fallback no mobile
+    if (IS_MOBILE_WEB) {
+      localStorage.setItem(GOOGLE_REDIRECT_INTENT_KEY, JSON.stringify({ intent, role: selectedRole }));
+      await window.__signInWithRedirect(auth, new window.__GoogleAuthProvider());
+      return null; // não deve nem chegar aqui — a navegação já deve ter acontecido
+    }
+
     throw new Error('Não foi possível entrar com o Google. Tente novamente.');
   }
   const idToken = await result.user.getIdToken();
@@ -573,29 +574,51 @@ async function handleGoogleRedirectResult() {
     result = await window.__getRedirectResult(auth);
   } catch (err) {
     console.error('Erro ao processar retorno do login com Google:', err.message);
-    alert('[DEBUG temporário] Erro no retorno do login Google: ' + err.code + ' — ' + err.message); // DEBUG temporário
-    return false;
-  }
-  if (!result) {
-    if (localStorage.getItem(GOOGLE_REDIRECT_INTENT_KEY)) {
-      alert('[DEBUG temporário] Voltou do Google mas getRedirectResult() não achou nada (result=null). Provável causa: navegador perdeu o estado do redirect.'); // DEBUG temporário
-    }
-    return false; // carregamento normal, não veio de um redirect do Google
+    // Se há uma intenção guardada mas erro ao processar, tenta fallback abaixo
+    if (!localStorage.getItem(GOOGLE_REDIRECT_INTENT_KEY)) return false;
   }
 
   const stored = localStorage.getItem(GOOGLE_REDIRECT_INTENT_KEY);
+  if (!stored) return false; // nenhuma intenção guardada, não veio de redirect
+
   localStorage.removeItem(GOOGLE_REDIRECT_INTENT_KEY);
-  const { intent, role } = stored ? JSON.parse(stored) : { intent: 'login', role: 'client' };
+  const { intent, role } = JSON.parse(stored);
 
-  const idToken = await result.user.getIdToken();
-  const profile = { idToken, name: result.user.displayName, email: result.user.email, photoUrl: result.user.photoURL };
-
-  if (intent === 'register') {
-    await completeGoogleRegister(profile, role || 'client');
-  } else {
-    await finishGoogleLogin(profile);
+  // Se getRedirectResult() funcionou, usa seu resultado
+  if (result) {
+    const idToken = await result.user.getIdToken();
+    const profile = { idToken, name: result.user.displayName, email: result.user.email, photoUrl: result.user.photoURL };
+    if (intent === 'register') {
+      await completeGoogleRegister(profile, role || 'client');
+    } else {
+      await finishGoogleLogin(profile);
+    }
+    return true;
   }
-  return true;
+
+  // Fallback: se getRedirectResult() retornou null mas há uma intenção guardada,
+  // verifica se o usuário está autenticado (Firebase pode ter mantido a sessão
+  // mesmo com localStorage perdido). Isso é comum em mobile quando cookies
+  // de terceiros não são completamente bloqueados.
+  const user = auth.currentUser;
+  if (user) {
+    try {
+      const idToken = await user.getIdToken();
+      const profile = { idToken, name: user.displayName, email: user.email, photoUrl: user.photoURL };
+      if (intent === 'register') {
+        await completeGoogleRegister(profile, role || 'client');
+      } else {
+        await finishGoogleLogin(profile);
+      }
+      return true;
+    } catch (err) {
+      console.error('Erro ao tentar login via fallback:', err.message);
+      return false;
+    }
+  }
+
+  // Nenhum resultado e usuário não autenticado — fluxo normal de boot
+  return false;
 }
 
 let registerGoogleIdToken = null;
@@ -656,7 +679,7 @@ function providerNavConfig() {
   return [
     { id: 'provider-home', label: 'Início', icon: ICONS.home },
     { id: 'provider-jobs', label: 'Trabalhos', icon: ICONS.requests },
-    { id: 'provider-earnings', label: 'Ganhos', icon: ICONS.earnings },
+    { id: 'provider-earnings', label: 'Financeiro', icon: ICONS.earnings },
     { id: 'messages', label: 'Mensagens', icon: ICONS.messages },
     { id: 'profile', label: 'Perfil', icon: ICONS.profile },
   ];
@@ -774,12 +797,12 @@ async function openHowItWorks(origin) {
     el.innerHTML = `
       <strong style="font-size:14px;">💰 Como funciona por aqui</strong>
       <ul style="margin:10px 0 0;padding-left:18px;font-size:13px;color:var(--ink-soft);line-height:1.8;">
-        <li>Comissão da plataforma: <strong style="color:var(--ink);">${standardRate}%</strong> sobre cada serviço pago pelo cliente.</li>
+        <li>Taxa da NEXSERV: <strong style="color:var(--ink);">${standardRate}%</strong> sobre cada serviço pago pelo cliente.</li>
         ${promoActive ? `<li>🏆 Benefício de fundador: como você é um dos <strong style="color:var(--primary-dark);">${promoCap} primeiros prestadores</strong>, ganha <strong style="color:var(--ink);">selo permanente</strong> no seu perfil, <strong style="color:var(--ink);">200 moedas</strong> de bônus e <strong style="color:var(--ink);">destaque de perfil grátis por ${promoDurationMonths} meses</strong> (aparece em rodízio na home, dando vez pra todos os fundadores).</li>` : ''}
         <li>100 moedas pra destacar uma proposta específica — sobe ela no topo pro cliente daquele pedido.</li>
         <li>300 moedas pra desbloquear o contato de cada cliente (só depois que ele pagar).</li>
         <li>700 moedas pra destacar seu perfil por 30 dias — aparece primeiro pros clientes e ganha o selo "Destaque" nas propostas.</li>
-        <li>Saque dos seus ganhos direto pra sua conta bancária, aprovação em até 1 dia útil.</li>
+        <li>Cobrança automática da taxa da NEXSERV via Pix, direto na tela Faturas do app.</li>
       </ul>`;
   } catch {
     el.innerHTML = '<p style="font-size:13px;color:var(--ink-soft);">Não foi possível carregar essas informações agora.</p>';
@@ -1459,13 +1482,6 @@ async function enterApp() {
       } catch { /* payload inválido, ignora */ }
     }
   }
-
-  // Mesma lógica acima, mas pro serviço de preço fechado (ver startInstantCheckout).
-  const pendingInstantServiceId = localStorage.getItem('chama_pending_instant_service');
-  if (pendingInstantServiceId) {
-    localStorage.removeItem('chama_pending_instant_service');
-    if (user.role === 'client') openInstantServiceDetail(pendingInstantServiceId).catch(() => {});
-  }
 }
 
 // ---------- Cache local (mostra o que já tem guardado na hora, sem esperar
@@ -1539,7 +1555,6 @@ async function loadHomeCategories() {
   `).join('');
 
   loadHomeBanner();
-  loadHomeInstantServices();
 }
 
 function bannerHTML(b) {
@@ -1648,74 +1663,6 @@ async function loadFeaturedProviders() {
   renderFeaturedProviders(providers);
 }
 
-// ---------- Serviços com preço fechado (contrate agora) ----------
-// Terceira modalidade, ao lado de orçamento (requests.js) e do catálogo
-// próprio do prestador (provider.js /catalog) — aqui é a NexServ quem fixa
-// o preço e despacha o pedido pago pra todos os prestadores elegíveis, o
-// primeiro que aceitar garante o serviço (ver src/routes/instantServices.js
-// e src/services/serviceDispatch.js).
-function svcCardHTML(s) {
-  const hasVariations = s.variation_count > 0;
-  const price = s.display_price != null ? `${hasVariations ? 'A partir de ' : ''}${money(s.display_price)}` : 'Sob consulta';
-  return `
-    <div class="svc-card" onclick="openInstantServiceDetail('${s.id}')">
-      <div class="svc-photo">
-        ${s.image_url ? `<img src="${imgProxy(s.image_url)}" loading="lazy">` : (categoryIcon[s.category] || '🔧')}
-      </div>
-      <div class="svc-body">
-        <div class="svc-name">${esc(s.name)}</div>
-        <div class="svc-price">${price}</div>
-        <div class="svc-cat">${esc(s.category)}</div>
-      </div>
-    </div>
-  `;
-}
-
-function renderHomeInstantServices(list) {
-  list.forEach((s) => { instantServicesById[s.id] = s; });
-  const section = document.getElementById('home-instant-services-section');
-  if (!list.length) { section.style.display = 'none'; return; }
-  section.style.display = 'block';
-  document.getElementById('home-instant-services').innerHTML = list.map(svcCardHTML).join('');
-}
-
-async function loadHomeInstantServices() {
-  try {
-    const selectedCity = getSelectedCity();
-    const params = new URLSearchParams({ homeOnly: 'true' });
-    if (selectedCity.city) { params.set('city', selectedCity.city); if (selectedCity.state) params.set('state', selectedCity.state); }
-    const list = await api(`/services?${params.toString()}`);
-    renderHomeInstantServices(list);
-  } catch { /* recurso novo — se o cache antigo do app ainda não tiver essa rota, ignora */ }
-}
-
-function openInstantServicesScreen() { showScreen('instant-services'); }
-
-let instantServicesAll = [];
-let instantServicesCategory = 'Todos';
-
-async function renderInstantServicesScreen() {
-  document.getElementById('instant-services-search').value = '';
-  document.getElementById('instant-services-list').innerHTML = '<div class="empty-state" style="grid-column:1/-1;padding:40px 20px;"><p>Carregando...</p></div>';
-  const selectedCity = getSelectedCity();
-  const listParams = new URLSearchParams();
-  if (selectedCity.city) { listParams.set('city', selectedCity.city); if (selectedCity.state) listParams.set('state', selectedCity.state); }
-  instantServicesAll = await api(`/services?${listParams.toString()}`);
-  instantServicesAll.forEach((s) => { instantServicesById[s.id] = s; });
-  instantServicesCategory = 'Todos';
-  const categories = ['Todos', ...new Set(instantServicesAll.flatMap((s) => s.categories && s.categories.length ? s.categories : [s.category]))];
-  document.getElementById('instant-services-category-tabs').innerHTML = categories.map((c) => `
-    <button class="${c === instantServicesCategory ? 'active' : ''}" onclick="setInstantServicesCategory('${c.replace(/'/g, "\\'")}')">${c}</button>
-  `).join('');
-  renderInstantServicesList();
-}
-
-function setInstantServicesCategory(cat) {
-  instantServicesCategory = cat;
-  document.querySelectorAll('#instant-services-category-tabs button').forEach((b) => b.classList.toggle('active', b.textContent === cat));
-  renderInstantServicesList();
-}
-
 let trackSearchTimer = null;
 // Dispara Search 800ms depois que a pessoa para de digitar — em vez de a
 // cada tecla, que lotaria o Gerenciador de Eventos com ruído inútil.
@@ -1723,328 +1670,6 @@ function trackSearchDebounced(query) {
   if (trackSearchTimer) clearTimeout(trackSearchTimer);
   if (!query || !query.trim()) return;
   trackSearchTimer = setTimeout(() => trackConversionEvent('Search', { search_string: query.trim() }), 800);
-}
-
-function filterInstantServices(query) {
-  renderInstantServicesList(query);
-  trackSearchDebounced(query);
-}
-
-function renderInstantServicesList(query) {
-  const q = normalize(query ?? document.getElementById('instant-services-search').value);
-  const matches = instantServicesAll.filter((s) =>
-    (instantServicesCategory === 'Todos' || (s.categories && s.categories.length ? s.categories.includes(instantServicesCategory) : s.category === instantServicesCategory)) &&
-    (!q || normalize(s.name).includes(q))
-  );
-  document.getElementById('instant-services-list').innerHTML = matches.length
-    ? matches.map(svcCardHTML).join('')
-    : '<div class="empty-state" style="grid-column:1/-1;"><span class="glyph">🔍</span><p>Nenhum serviço encontrado.</p></div>';
-}
-
-let instantDetailService = null;
-let instantDetailSelectedVariationIds = new Set();
-let instantDetailQuantity = 1;
-
-let instantDetailOpenToken = 0;
-let instantServicesById = {};
-
-async function openInstantServiceDetail(id) {
-  // Mostra a tela IMEDIATAMENTE (com o que já se tem em cache do card, se
-  // tiver) em vez de esperar a resposta da rede pra trocar de tela — antes
-  // disso a tela ficava parada uns instantes e dava a impressão de travado
-  // (levando a cliques duplos, que no navegador viram gesto de zoom).
-  const token = ++instantDetailOpenToken;
-  const cachedSummary = instantServicesById[id];
-  instantDetailService = cachedSummary ? { ...cachedSummary, variations: [] } : { id, name: 'Carregando...', variations: [] };
-  instantDetailSelectedVariationIds = new Set();
-  instantDetailQuantity = 1;
-  renderInstantServiceDetail();
-  showScreen('instant-service-detail');
-
-  const s = await api(`/services/${id}`);
-  if (token !== instantDetailOpenToken) return; // usuário já saiu/abriu outro nesse meio tempo
-  instantDetailService = s;
-  // Primeira variação vem pré-selecionada — mínimo 1 sempre (ver
-  // toggleInstantVariation), cliente pode marcar mais de uma pra somar
-  // (ex: "Montagem" + "Desmontagem" de móveis).
-  instantDetailSelectedVariationIds = new Set(s.variations && s.variations.length ? [s.variations[0].id] : []);
-  renderInstantServiceDetail();
-  trackConversionEvent('ViewContent', { content_name: s.name, content_category: s.category, value: s.display_price != null ? parseFloat(s.display_price) : undefined, currency: 'BRL' });
-}
-
-function selectedInstantVariations() {
-  return (instantDetailService.variations || []).filter((v) => instantDetailSelectedVariationIds.has(v.id));
-}
-
-function incrementInstantQuantity() {
-  if (instantDetailQuantity >= 20) return;
-  instantDetailQuantity++;
-  renderInstantServiceDetail();
-}
-
-function decrementInstantQuantity() {
-  if (instantDetailQuantity <= 1) return;
-  instantDetailQuantity--;
-  renderInstantServiceDetail();
-}
-
-function renderInstantServiceDetail() {
-  const s = instantDetailService;
-  document.getElementById('instant-detail-header').textContent = s.name;
-  document.getElementById('instant-detail-category').textContent = s.category;
-  document.getElementById('instant-detail-name').textContent = s.name;
-  const shortEl = document.getElementById('instant-detail-short');
-  shortEl.textContent = s.short_description || '';
-  shortEl.style.display = s.short_description ? 'block' : 'none';
-  const descEl = document.getElementById('instant-detail-description');
-  descEl.textContent = s.description || '';
-  descEl.style.display = s.description ? 'block' : 'none';
-  document.getElementById('instant-detail-duration').textContent = s.duration_label ? `Duração estimada: ${s.duration_label}` : '';
-
-  const imgWrap = document.getElementById('instant-detail-image-wrap');
-  if (s.image_url) { imgWrap.style.display = 'block'; document.getElementById('instant-detail-image').src = imgProxy(s.image_url); }
-  else imgWrap.style.display = 'none';
-
-  const variationsField = document.getElementById('instant-detail-variations-field');
-  if (s.variations && s.variations.length) {
-    const isSingle = s.variation_selection_mode === 'single';
-    variationsField.style.display = 'block';
-    document.getElementById('instant-detail-variations-label').textContent = isSingle ? 'Escolha uma opção' : 'Selecione um ou mais (mínimo 1)';
-    document.getElementById('instant-detail-variations-fallback').style.display = isSingle ? 'block' : 'none';
-    document.getElementById('instant-detail-variations').innerHTML = s.variations.map((v) => `
-      <button type="button" class="chip-opt ${instantDetailSelectedVariationIds.has(v.id) ? 'selected' : ''}" onclick="toggleInstantVariation('${v.id}')">${esc(v.name)} — ${v.display_price != null ? money(v.display_price) : 'sob consulta'}</button>
-    `).join('');
-  } else {
-    variationsField.style.display = 'none';
-  }
-
-  const selectedVariations = selectedInstantVariations();
-  const unitPrice = selectedVariations.length
-    ? selectedVariations.reduce((sum, v) => sum + (v.display_price || 0), 0)
-    : s.display_price;
-  document.getElementById('instant-detail-quantity').textContent = instantDetailQuantity;
-  const unitPriceEl = document.getElementById('instant-detail-unit-price');
-  if (unitPrice != null) {
-    document.getElementById('instant-detail-price').textContent = money(unitPrice * instantDetailQuantity);
-    unitPriceEl.style.display = instantDetailQuantity > 1 ? 'block' : 'none';
-    unitPriceEl.textContent = `${money(unitPrice)} cada × ${instantDetailQuantity}`;
-  } else {
-    document.getElementById('instant-detail-price').textContent = 'Sob consulta';
-    unitPriceEl.style.display = 'none';
-  }
-
-  const includedWrap = document.getElementById('instant-detail-included-wrap');
-  if (s.included_items && s.included_items.length) {
-    includedWrap.style.display = 'block';
-    document.getElementById('instant-detail-included').innerHTML = s.included_items.map((i) => `<li>${esc(i)}</li>`).join('');
-  } else includedWrap.style.display = 'none';
-
-  const excludedWrap = document.getElementById('instant-detail-excluded-wrap');
-  if (s.excluded_items && s.excluded_items.length) {
-    excludedWrap.style.display = 'block';
-    document.getElementById('instant-detail-excluded').innerHTML = s.excluded_items.map((i) => `<li>${esc(i)}</li>`).join('');
-  } else excludedWrap.style.display = 'none';
-}
-
-function toggleInstantVariation(variationId) {
-  // 'single' = alternativas (ex: BTUs do ar-condicionado) — escolhe só uma,
-  // clicar troca a seleção. 'multiple' = aditivas (ex: Montagem +
-  // Desmontagem) — soma quantas quiser, mínimo 1 sempre selecionada.
-  if (instantDetailService.variation_selection_mode === 'single') {
-    instantDetailSelectedVariationIds = new Set([variationId]);
-  } else if (instantDetailSelectedVariationIds.has(variationId)) {
-    if (instantDetailSelectedVariationIds.size <= 1) return;
-    instantDetailSelectedVariationIds.delete(variationId);
-  } else {
-    instantDetailSelectedVariationIds.add(variationId);
-  }
-  renderInstantServiceDetail();
-}
-
-// Pra quem não sabe qual opção de variação escolher (ex: BTUs do
-// ar-condicionado) — sai do fluxo de preço fechado e cai no orçamento normal,
-// onde o prestador vê fotos/descrição e decide o valor caso a caso.
-function preferOrcamentoForInstantService() {
-  const s = instantDetailService;
-  openRequestForm(s.category, s.name);
-}
-
-function startInstantCheckout() {
-  if (!token) {
-    localStorage.setItem('chama_pending_instant_service', instantDetailService.id);
-    openRegister('client');
-    return;
-  }
-  const selectedVariations = selectedInstantVariations();
-  const unitPrice = selectedVariations.length
-    ? selectedVariations.reduce((sum, v) => sum + (v.display_price || 0), 0)
-    : instantDetailService.display_price;
-  if (unitPrice == null) { alert('Este serviço ainda não tem preço configurado. Tente novamente mais tarde.'); return; }
-  const selectedCity = getSelectedCity();
-  const baseName = selectedVariations.length ? `${instantDetailService.name} — ${selectedVariations.map((v) => v.name).join(' + ')}` : instantDetailService.name;
-  document.getElementById('instant-addr-service-name').textContent = instantDetailQuantity > 1 ? `${baseName} (${instantDetailQuantity}x)` : baseName;
-  document.getElementById('instant-addr-price').textContent = money(unitPrice * instantDetailQuantity);
-  document.getElementById('instant-addr-zip').value = user.zipCode || '';
-  document.getElementById('instant-addr-neighborhood').value = user.neighborhood || '';
-  document.getElementById('instant-addr-city').value = selectedCity.city || user.city || '';
-  document.getElementById('instant-addr-state').value = selectedCity.state || user.state || '';
-  document.getElementById('instant-addr-description').value = '';
-  document.getElementById('instant-addr-error').textContent = '';
-  showScreen('instant-checkout-address');
-  trackConversionEvent('AddToCart', { content_name: baseName, value: unitPrice * instantDetailQuantity, currency: 'BRL' });
-}
-
-let instantCheckoutMode = false;
-let instantCheckoutContext = null;
-
-function goToInstantPaymentScreen() {
-  const errorEl = document.getElementById('instant-addr-error');
-  errorEl.textContent = '';
-  const neighborhood = document.getElementById('instant-addr-neighborhood').value.trim();
-  const city = document.getElementById('instant-addr-city').value.trim();
-  const state = document.getElementById('instant-addr-state').value.trim().toUpperCase();
-  if (!neighborhood || !city || !state) { errorEl.textContent = 'Informe bairro, cidade e UF.'; return; }
-
-  const selectedVariations = selectedInstantVariations();
-  const unitPrice = selectedVariations.length
-    ? selectedVariations.reduce((sum, v) => sum + (v.display_price || 0), 0)
-    : instantDetailService.display_price;
-  const quantity = instantDetailQuantity;
-  const baseName = selectedVariations.length ? `${instantDetailService.name} — ${selectedVariations.map((v) => v.name).join(' + ')}` : instantDetailService.name;
-  const price = Math.round(unitPrice * quantity * 100) / 100;
-  instantCheckoutContext = {
-    serviceId: instantDetailService.id,
-    variationIds: selectedVariations.map((v) => v.id),
-    serviceLabel: quantity > 1 ? `${baseName} (${quantity}x)` : baseName,
-    quantity,
-    price,
-    zipCode: document.getElementById('instant-addr-zip').value.trim(),
-    neighborhood, city, state,
-    description: document.getElementById('instant-addr-description').value.trim(),
-  };
-
-  document.getElementById('pay-total').textContent = money(price);
-  document.getElementById('pay-details').textContent = instantCheckoutContext.serviceLabel;
-  document.getElementById('pay-coupon-section').style.display = 'none';
-  document.getElementById('pay-discount-row').style.display = 'none';
-  document.getElementById('pay-credit-row').style.display = 'none';
-  installmentsEligible = false;
-  paymentInFlight = false;
-  instantCheckoutMode = true;
-  document.getElementById('confirm-payment-btn').disabled = false;
-  showScreen('payment');
-  selectPayMethod(document.querySelector('.screen[data-screen="payment"] .pay-method[data-method="pix"]'));
-  trackConversionEvent('InitiateCheckout', { content_name: instantCheckoutContext.serviceLabel, value: price, currency: 'BRL' });
-}
-
-async function confirmInstantPayment() {
-  if (paymentInFlight) return;
-  paymentInFlight = true;
-  const btn = document.getElementById('confirm-payment-btn');
-  const originalBtnText = btn.textContent;
-  btn.disabled = true;
-  btn.textContent = 'Processando...';
-  const errorEl = document.getElementById('payment-error');
-  errorEl.textContent = '';
-  trackConversionEvent('AddPaymentInfo', { content_name: instantCheckoutContext.serviceLabel, value: instantCheckoutContext.price, currency: 'BRL' });
-
-  const body = {
-    paymentMethod: payMethod,
-    variationIds: instantCheckoutContext.variationIds,
-    quantity: instantCheckoutContext.quantity,
-    neighborhood: instantCheckoutContext.neighborhood,
-    city: instantCheckoutContext.city,
-    state: instantCheckoutContext.state,
-    zipCode: instantCheckoutContext.zipCode || undefined,
-    description: instantCheckoutContext.description || undefined,
-  };
-  if (payMethod === 'credit_card') {
-    const [expMonth, expYear] = (document.getElementById('card-expiry').value || '').split('/');
-    body.card = {
-      number: document.getElementById('card-number').value.replace(/\s/g, ''),
-      holderName: document.getElementById('card-holder').value,
-      expMonth: parseInt(expMonth, 10),
-      expYear: parseInt(expYear, 10),
-      cvv: document.getElementById('card-cvv').value,
-    };
-    body.billingAddress = {
-      line1: instantCheckoutContext.neighborhood || user.street || 'Não informado',
-      zipCode: (document.getElementById('card-zip').value || '').replace(/\D/g, ''),
-      city: instantCheckoutContext.city || user.city || 'Não informado',
-      state: instantCheckoutContext.state || user.state || 'PR',
-    };
-  }
-
-  try {
-    const result = await api(`/services/${instantCheckoutContext.serviceId}/checkout`, { method: 'POST', body });
-    if (result.status === 'paid') {
-      trackConversionEvent('Purchase', { value: instantCheckoutContext.price, currency: 'BRL' });
-    }
-    if (instantCheckoutContext.city && instantCheckoutContext.state) setSelectedCityState(instantCheckoutContext.city, instantCheckoutContext.state);
-    instantCheckoutMode = false;
-    paymentInFlight = false;
-    showInstantSearchingScreen(result);
-  } catch (err) {
-    errorEl.textContent = err.message;
-    btn.disabled = false;
-    btn.textContent = originalBtnText;
-    paymentInFlight = false;
-  }
-}
-
-function showInstantSearchingScreen(result) {
-  instantSearchingRequestId = result.requestId;
-  const pixPending = payMethod === 'pix' && !!result.qrCodeUrl;
-  document.getElementById('instant-searching-title').textContent = pixPending ? '⚠️ Falta pagar o Pix!' : 'Buscando profissional...';
-  document.getElementById('instant-searching-icon').textContent = pixPending ? '⚠️' : '🔎';
-  document.getElementById('instant-searching-sub').textContent = pixPending
-    ? 'O pedido só entra na busca por profissional depois que você pagar. Escaneie o QR Code ou copie o código Pix abaixo agora.'
-    : 'Pagamento confirmado! Estamos buscando um profissional disponível para você. Você não precisa permanecer nesta tela.';
-  document.getElementById('instant-searching-service').textContent = instantCheckoutContext.serviceLabel;
-  document.getElementById('instant-searching-value').textContent = money(instantCheckoutContext.price);
-  document.getElementById('instant-searching-pix').innerHTML = pixPending
-    ? `<div class="fee-note" style="background:var(--danger-tint);color:var(--danger);font-weight:700;"><span>⚠️</span><span>Isso ainda não confirmou o pedido — pague o Pix abaixo pra começarmos a buscar um profissional.</span></div>${pixQrBoxHTML(result.qrCodeUrl, result.pixCopyPaste)}`
-    : '';
-  showScreen('instant-searching');
-}
-
-async function renderInstantSearchingScreen(r) {
-  instantSearchingRequestId = r.id;
-  let tx = null;
-  try { tx = await api(`/requests/${r.id}/transaction`); } catch { /* ainda sem transação visível */ }
-  const pixPending = tx && tx.status === 'pending' && tx.payment_method === 'pix';
-  document.getElementById('instant-searching-title').textContent = pixPending ? '⚠️ Falta pagar o Pix!' : 'Buscando profissional...';
-  document.getElementById('instant-searching-icon').textContent = pixPending ? '⚠️' : '🔎';
-  document.getElementById('instant-searching-sub').textContent = pixPending
-    ? 'Seu pagamento Pix ainda não foi confirmado. Verifique no app do seu banco — se já pagou, aguarde alguns instantes ou fale com o suporte.'
-    : 'Pagamento confirmado! Estamos buscando um profissional disponível para você. Você não precisa permanecer nesta tela.';
-  document.getElementById('instant-searching-service').textContent = r.service_name;
-  document.getElementById('instant-searching-value').textContent = money(r.value);
-  document.getElementById('instant-searching-pix').innerHTML = '';
-}
-
-let instantSearchingPollTimer = null;
-let instantSearchingRequestId = null;
-
-function startInstantSearchingPoll() {
-  stopInstantSearchingPoll();
-  instantSearchingPollTimer = setInterval(async () => {
-    if (!instantSearchingRequestId) return;
-    try {
-      const r = await api(`/requests/${instantSearchingRequestId}`);
-      if (['accepted', 'in_progress', 'awaiting_approval', 'done'].includes(r.status)) {
-        stopInstantSearchingPoll();
-        await renderConfirmFromRequest(r);
-        showScreen('confirm');
-      } else if (r.status === 'canceled') {
-        stopInstantSearchingPoll();
-        setTab('my-requests');
-      }
-    } catch { /* falha pontual de rede — tenta de novo no próximo tick */ }
-  }, 8000);
-}
-function stopInstantSearchingPoll() {
-  if (instantSearchingPollTimer) { clearInterval(instantSearchingPollTimer); instantSearchingPollTimer = null; }
 }
 
 function statusPillHTML(status) {
@@ -2134,20 +1759,6 @@ async function filterSearch(query) {
 
 // ---------- Categoria / pedido ----------
 async function openCategory(catName) {
-  // Se a categoria tem preço fixo configurado por algum prestador, mostra a
-  // lista deles direto — só cai no formulário de orçamento se não tiver
-  // nenhum (ou se der erro na checagem, pra não travar o cliente).
-  if (FIXED_PRICE_CATEGORIES.includes(catName) || KM_RATE_CATEGORIES.includes(catName)) {
-    try {
-      const providers = await api(`/providers/directory/list?category=${encodeURIComponent(catName)}&onlyFixedPrice=true`);
-      if (providers.length > 0) {
-        allProvidersCategory = catName;
-        allProvidersOnlyFixedPrice = true;
-        showScreen('all-providers');
-        return;
-      }
-    } catch { /* segue pro orçamento normal */ }
-  }
   openRequestForm(catName, catName);
 }
 
@@ -2172,8 +1783,6 @@ async function openRequestForm(catName, serviceName) {
   }
 
   requestDraft = { category: catName, serviceName, preferredProviderId: null };
-  document.getElementById('req-view-providers-link').style.display =
-    (FIXED_PRICE_CATEGORIES.includes(catName) || KM_RATE_CATEGORIES.includes(catName)) ? '' : 'none';
   document.getElementById('req-service').value = serviceName;
   document.getElementById('req-description').value = '';
   document.getElementById('req-photos').value = '';
@@ -2301,10 +1910,6 @@ async function autoFillCep(value, context) {
     document.getElementById('req-neighborhood').value = data.neighborhood;
     document.getElementById('req-city').value = data.city;
     document.getElementById('req-state').value = data.state;
-  } else if (context === 'instant-checkout') {
-    document.getElementById('instant-addr-neighborhood').value = data.neighborhood;
-    document.getElementById('instant-addr-city').value = data.city;
-    document.getElementById('instant-addr-state').value = data.state;
   }
 }
 
@@ -2401,9 +2006,6 @@ async function openMyRequest(requestId) {
   const r = await api(`/requests/${requestId}`);
   if (r.status === 'pending') {
     openProposalsScreen(r);
-  } else if (r.status === 'searching') {
-    await renderInstantSearchingScreen(r);
-    showScreen('instant-searching');
   } else if (r.status === 'awaiting_approval' || r.status === 'accepted' || r.status === 'in_progress' || r.status === 'done') {
     await renderConfirmFromRequest(r);
     showScreen('confirm');
@@ -2456,6 +2058,32 @@ async function cancelRequest(requestId) {
 }
 
 function proposalTicketHTML(r, p) {
+  if (p.locked) {
+    const rating = parseFloat(p.rating_avg) || 0;
+    const count = p.rating_count || 0;
+    const city = [p.provider_city, p.provider_state].filter(Boolean).join(', ');
+    const safeName = (p.provider_name || '').replace(/'/g, "\\'");
+    return `
+      <div class="ticket">
+        <div class="p-head">
+          <div class="p-avatar" style="filter:blur(2px);">${avatarBoxHTML(p.provider_name, p.provider_photo_url)}</div>
+          <div class="p-ident">
+            <div class="p-name-line">${esc(p.provider_name)}</div>
+            <div class="p-rating">
+              <span class="p-stars">${rating ? '★'.repeat(Math.round(rating)) : '—'}</span>
+              ${rating ? `<span class="p-score">${rating.toFixed(1)}</span>` : ''}
+              <span class="p-count">(${count} ${count === 1 ? 'avaliação' : 'avaliações'})</span>
+            </div>
+            ${city ? `<div class="p-city">📍 ${esc(city)}</div>` : ''}
+          </div>
+        </div>
+        <div class="p-notes" style="filter:blur(3px);user-select:none;">Valor e detalhes ocultos até desbloquear.</div>
+        <div class="error-msg" id="unlock-error-${p.id}"></div>
+        <button class="btn btn-primary btn-block" style="margin-top:12px;" onclick="unlockProposal('${r.id}','${p.id}',${p.unlockCostInCoins})">🔒 Desbloquear por ${p.unlockCostInCoins} moedas</button>
+      </div>
+    `;
+  }
+
   const rating = parseFloat(p.rating_avg) || 0;
   const count = p.rating_count || 0;
   // A profissão vem de pp.categories (o prestador pode ter mais de uma) — mostra
@@ -2495,6 +2123,20 @@ function proposalTicketHTML(r, p) {
       <button class="p-details" onclick="viewProviderProfile('${p.provider_id}')">Ver detalhes</button>
     </div>
   `;
+}
+
+async function unlockProposal(requestId, proposalId, costInCoins) {
+  const errorEl = document.getElementById(`unlock-error-${proposalId}`);
+  if (costInCoins != null && !confirm(`Vai gastar ${costInCoins} moedas pra ver este orçamento. Confirmar?`)) return;
+  try {
+    await api(`/requests/${requestId}/proposals/${proposalId}/unlock`, { method: 'POST' });
+    const r = await api(`/requests/${requestId}`);
+    await openProposalsScreen(r);
+  } catch (err) {
+    if (errorEl) {
+      errorEl.innerHTML = `${err.message}<br><button class="btn btn-ghost btn-small" style="margin-top:6px;" onclick="openClientWallet();">Comprar moedas</button>`;
+    }
+  }
 }
 
 let viewedProviderId = null;
@@ -2542,41 +2184,8 @@ async function viewProviderProfile(providerId, returnTo = 'proposals') {
       <div class="stat-box"><div class="num">${p.rating_count || 0}</div><div class="lab">Avaliações</div></div>
       <div class="stat-box"><div class="num">${p.completed_count}</div><div class="lab">Concluídos</div></div>
     </div>
-    ${Object.keys(catalogByCategory).length ? Object.entries(catalogByCategory).map(([cat, items]) => `
-      <div class="section-title" style="margin-top:16px;"><h3>Contratar agora — ${cat}</h3></div>
-      <p style="font-size:12.5px;color:var(--ink-soft);margin-top:0;">Preço fixo, sem precisar esperar proposta.</p>
-      ${items.map((it) => `
-        <div style="display:flex;align-items:center;gap:8px;border:1.5px solid var(--line);border-radius:11px;padding:10px 12px;margin-bottom:8px;">
-          <div style="flex:1;">
-            <div style="font-size:13.5px;font-weight:700;">${it.name}</div>
-            <div style="font-size:12px;color:var(--ink-soft);">${money(it.price)} por ${it.unit}</div>
-          </div>
-          <div style="display:flex;align-items:center;gap:8px;background:var(--paper);border-radius:20px;padding:4px 8px;">
-            <span style="cursor:pointer;color:var(--ink-soft);font-size:16px;font-weight:700;padding:0 4px;" onclick="adjustCatalogQty('${it.id}','${cat.replace(/'/g, "\\'")}',-1)">−</span>
-            <span id="catalog-qty-${it.id}" style="min-width:14px;text-align:center;font-size:13px;font-weight:700;">0</span>
-            <span style="cursor:pointer;color:var(--primary);font-size:16px;font-weight:700;padding:0 4px;" onclick="adjustCatalogQty('${it.id}','${cat.replace(/'/g, "\\'")}',1)">+</span>
-          </div>
-        </div>
-      `).join('')}
-      ${providerCatalogTravelFee > 0 ? `<p style="font-size:11.5px;color:var(--ink-faint);margin:0 0 4px;">+ ${money(providerCatalogTravelFee)} de taxa de deslocamento (cidade diferente da do prestador), incluída no total abaixo.</p>` : ''}
-      <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 2px 10px;">
-        <span style="font-size:12.5px;color:var(--ink-soft);">Total</span>
-        <span id="catalog-total-${cssId(cat)}" style="font-size:16px;font-weight:700;">${money(providerCatalogTravelFee)}</span>
-      </div>
-      <button class="btn btn-primary btn-block" onclick="checkoutProviderCatalog('${providerId}','${cat.replace(/'/g, "\\'")}','${p.name.replace(/'/g, "\\'")}')">Contratar agora</button>
-    `).join('') : ''}
-    ${kmRates.length ? kmRates.map((r) => `
-      <div class="section-title" style="margin-top:16px;"><h3>Contratar agora — ${r.category}</h3></div>
-      <p style="font-size:12.5px;color:var(--ink-soft);margin-top:0;">Escolha origem e destino — o valor é calculado na hora (R$ ${Number(r.price_per_km).toFixed(2).replace('.', ',')}/km${parseFloat(r.base_fee) > 0 ? ` + R$ ${Number(r.base_fee).toFixed(2).replace('.', ',')} de taxa fixa` : ''}).</p>
-      <div class="field"><label>Cidade de origem</label>
-        <select id="km-origin-${cssId(r.category)}">${availableCitiesCache.map((c) => `<option value="${c.city}|${c.state}">${c.city}/${c.state}</option>`).join('')}</select>
-      </div>
-      <div class="field"><label>Cidade de destino</label>
-        <select id="km-dest-${cssId(r.category)}">${availableCitiesCache.map((c) => `<option value="${c.city}|${c.state}">${c.city}/${c.state}</option>`).join('')}</select>
-      </div>
-      <button class="btn btn-ghost btn-block btn-small" onclick="quoteKmRate('${providerId}','${r.category.replace(/'/g, "\\'")}','${p.name.replace(/'/g, "\\'")}')">Ver preço</button>
-      <div id="km-quote-result-${cssId(r.category)}" style="margin-top:8px;"></div>
-    `).join('') : ''}
+    ${'' /* Fase 12: catálogo com preço fixo desativado — cliente só pode "Solicitar Orçamento" */}
+    ${'' /* Fase 12: preço por km desativado — mesmo motivo acima */}
     ${p.bio ? `<div class="section-title"><h3>Sobre</h3></div><p style="font-size:13.5px;color:var(--ink-soft);">${p.bio}</p>` : ''}
     ${p.portfolio && p.portfolio.length ? `
       <div class="section-title"><h3>Trabalhos realizados</h3></div>
@@ -2601,66 +2210,6 @@ let providerCatalogViewState = {};
 let providerCatalogItemsById = {};
 let providerCatalogTravelFee = 0;
 
-function adjustCatalogQty(itemId, category, delta) {
-  const current = providerCatalogViewState[itemId] || 0;
-  providerCatalogViewState[itemId] = Math.max(0, current + delta);
-  document.getElementById(`catalog-qty-${itemId}`).textContent = providerCatalogViewState[itemId];
-  const itemsTotal = Object.entries(providerCatalogViewState)
-    .filter(([id]) => providerCatalogItemsById[id]?.category === category)
-    .reduce((sum, [id, qty]) => sum + qty * parseFloat(providerCatalogItemsById[id].price), 0);
-  const totalEl = document.getElementById(`catalog-total-${cssId(category)}`);
-  if (totalEl) totalEl.textContent = money(itemsTotal + providerCatalogTravelFee);
-}
-
-async function checkoutProviderCatalog(providerId, category, providerName) {
-  const items = Object.entries(providerCatalogViewState)
-    .filter(([id, qty]) => qty > 0 && providerCatalogItemsById[id]?.category === category)
-    .map(([itemId, quantity]) => ({ itemId, quantity }));
-  if (items.length === 0) { alert('Escolha a quantidade de pelo menos um item.'); return; }
-  try {
-    const created = await api(`/providers/${providerId}/catalog/checkout`, { method: 'POST', body: { category, items } });
-    goToPaymentScreen(created, providerName);
-  } catch (err) {
-    alert(err.message);
-  }
-}
-
-async function quoteKmRate(providerId, category, providerName) {
-  const resultEl = document.getElementById(`km-quote-result-${cssId(category)}`);
-  resultEl.innerHTML = '<p style="font-size:12.5px;color:var(--ink-soft);">Calculando...</p>';
-  const [originCity, originState] = document.getElementById(`km-origin-${cssId(category)}`).value.split('|');
-  const [destCity, destState] = document.getElementById(`km-dest-${cssId(category)}`).value.split('|');
-  try {
-    const quote = await api(`/providers/${providerId}/km-rate/quote`, {
-      method: 'POST', body: { category, originCity, originState, destCity, destState },
-    });
-    resultEl.innerHTML = `
-      <p style="font-size:12.5px;color:var(--ink-soft);margin:0 0 6px;">${quote.distanceKm} km — total estimado</p>
-      ${quote.minimumApplied ? `<p style="font-size:11.5px;color:var(--ink-faint);margin:0 0 6px;">Valor mínimo de pedido aplicado.</p>` : ''}
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-        <span style="font-size:12.5px;color:var(--ink-soft);">Total</span>
-        <span style="font-size:16px;font-weight:700;">${money(quote.price)}</span>
-      </div>
-      <button class="btn btn-primary btn-block" onclick="checkoutKmRate('${providerId}','${category.replace(/'/g, "\\'")}','${providerName.replace(/'/g, "\\'")}')">Contratar agora</button>
-    `;
-  } catch (err) {
-    resultEl.innerHTML = `<p style="font-size:12.5px;color:var(--danger);">${err.message}</p>`;
-  }
-}
-
-async function checkoutKmRate(providerId, category, providerName) {
-  const [originCity, originState] = document.getElementById(`km-origin-${cssId(category)}`).value.split('|');
-  const [destCity, destState] = document.getElementById(`km-dest-${cssId(category)}`).value.split('|');
-  try {
-    const created = await api(`/providers/${providerId}/km-rate/checkout`, {
-      method: 'POST', body: { category, originCity, originState, destCity, destState },
-    });
-    goToPaymentScreen(created, providerName);
-  } catch (err) {
-    alert(err.message);
-  }
-}
-
 async function checkFavorited(providerId) {
   try {
     const favs = await api('/providers/favorites/mine');
@@ -2684,8 +2233,10 @@ async function acceptProposal(btn, requestId, proposalId, providerName, value) {
   btn.textContent = 'Aceitando...';
   try {
     await api(`/requests/${requestId}/proposals/${proposalId}/accept`, { method: 'POST' });
+    alert('O pagamento deste serviço é combinado e feito diretamente com o prestador.');
     const updated = await api(`/requests/${requestId}`);
-    goToPaymentScreen(updated, providerName);
+    await renderConfirmFromRequest(updated);
+    showScreen('confirm');
   } catch (err) {
     btn.disabled = false;
     btn.textContent = originalText;
@@ -2693,85 +2244,7 @@ async function acceptProposal(btn, requestId, proposalId, providerName, value) {
   }
 }
 
-// Extraído de acceptProposal() pra poder ser chamado também a partir da tela
-// de detalhes do pedido — um pedido aceito mas ainda não pago (ex: cliente
-// saiu da tela antes de pagar) precisa de um jeito de voltar pro pagamento.
-function goToPaymentScreen(updated, providerName) {
-  instantCheckoutMode = false;
-  document.getElementById('pay-coupon-section').style.display = 'block';
-  document.getElementById('pay-total').textContent = money(updated.value);
-  document.getElementById('pay-details').textContent = `${updated.service_name} · ${providerName}`;
-  currentChat = { requestId: updated.id, otherName: providerName, otherId: updated.provider_id, address: updated.address };
-  appliedCoupon = null;
-  document.getElementById('coupon-input').value = '';
-  document.getElementById('coupon-error').textContent = '';
-  document.getElementById('pay-discount-row').style.display = 'none';
-  selectedInstallments = 1;
-  document.getElementById('installments-select').value = '1';
-  installmentsEligible = !!updated.allow_installments && parseFloat(updated.value) >= MIN_INSTALLMENT_AMOUNT;
-  paymentInFlight = false;
-  const btn = document.getElementById('confirm-payment-btn');
-  btn.disabled = false;
-  btn.textContent = 'Pagar e confirmar serviço';
-  showScreen('payment');
-  selectPayMethod(document.querySelector('.screen[data-screen="payment"] .pay-method[data-method="pix"]'));
-  trackConversionEvent('InitiateCheckout', { content_name: updated.service_name, value: parseFloat(updated.value), currency: 'BRL' });
-
-  // Crédito de carteira (ganho num cancelamento anterior por culpa do
-  // prestador) abate automático na hora de pagar — só avisa aqui, quem
-  // calcula o valor final de verdade é o backend em POST /requests/:id/pay.
-  const creditRow = document.getElementById('pay-credit-row');
-  creditRow.style.display = 'none';
-  api('/my-credit').then((c) => {
-    if (c.balance > 0) {
-      creditRow.style.display = 'block';
-      const abatido = Math.min(c.balance, parseFloat(updated.value));
-      creditRow.textContent = `💰 Você tem ${money(c.balance)} de crédito — ${money(abatido)} será usado automaticamente neste pagamento`;
-    }
-  }).catch(() => {});
-}
-
-async function payNow(requestId) {
-  const r = await api(`/requests/${requestId}`);
-  goToPaymentScreen(r, r.provider_name);
-}
-
 // ---------- Pagamento ----------
-let appliedCoupon = null;
-
-async function applyCoupon() {
-  const errorEl = document.getElementById('coupon-error');
-  const discountRow = document.getElementById('pay-discount-row');
-  errorEl.textContent = '';
-  const code = document.getElementById('coupon-input').value.trim();
-  if (!code) { errorEl.textContent = 'Informe um código de cupom.'; return; }
-
-  try {
-    const result = await api(`/requests/${currentChat.requestId}/coupon/preview`, { method: 'POST', body: { code } });
-    appliedCoupon = { code, discountValue: result.discountValue, newTotal: result.newTotal };
-    discountRow.style.display = 'block';
-    discountRow.textContent = `Cupom aplicado: -${money(result.discountValue)} · Novo total: ${money(result.newTotal)}`;
-  } catch (err) {
-    appliedCoupon = null;
-    discountRow.style.display = 'none';
-    errorEl.textContent = err.message;
-  }
-}
-
-function selectPayMethod(el) {
-  document.querySelectorAll('.screen[data-screen="payment"] .pay-method').forEach((m) => m.classList.remove('selected'));
-  el.classList.add('selected');
-  payMethod = el.dataset.method;
-  document.getElementById('card-fields').style.display = payMethod === 'credit_card' ? 'block' : 'none';
-  const showInstallments = payMethod === 'credit_card' && installmentsEligible;
-  document.getElementById('installments-field').style.display = showInstallments ? 'block' : 'none';
-  if (!showInstallments) { selectedInstallments = 1; document.getElementById('installments-select').value = '1'; }
-  else updateInstallmentsPreview();
-  // O botão só gera o QR Code no Pix — não paga sozinho. Texto diferente pra
-  // não dar a impressão de que clicar já fecha o serviço (era exatamente
-  // essa confusão que fazia gente pular a etapa de pagar de verdade).
-  document.getElementById('confirm-payment-btn').textContent = payMethod === 'pix' ? 'Gerar Pix para pagamento' : 'Pagar e confirmar serviço';
-}
 
 // Mesma fórmula do backend (src/config/anticipation.js) — parcelar libera o
 // valor pro prestador na hora em vez de esperar as parcelas (antecipação
@@ -2779,28 +2252,14 @@ function selectPayMethod(el) {
 // do cliente. Duplicado aqui só pra mostrar o valor certo ANTES de pagar;
 // quem calcula o valor de verdade cobrado é sempre o backend.
 const ANTICIPATION_RATE_MONTHLY = 0.016;
-function estimateParceladoSurchargePct(installments) {
-  return installments * ANTICIPATION_RATE_MONTHLY;
-}
-
-function updateInstallmentsPreview() {
-  selectedInstallments = parseInt(document.getElementById('installments-select').value, 10);
-  const total = parseFloat((document.getElementById('pay-total').textContent || '').replace(/[^\d,]/g, '').replace(',', '.')) || 0;
-  const preview = document.getElementById('installments-preview');
-  if (selectedInstallments > 1) {
-    const surchargePct = estimateParceladoSurchargePct(selectedInstallments);
-    const totalComJuros = total * (1 + surchargePct);
-    preview.innerHTML = `${selectedInstallments}x de ${money(totalComJuros / selectedInstallments)} — total ${money(totalComJuros)} (+${(surchargePct * 100).toFixed(1)}% pela antecipação automática do pagamento, cobrada pela operadora)`;
-  } else {
-    preview.textContent = '';
-  }
-}
 
 function pixQrBoxHTML(qrCodeUrl, pixCopyPaste) {
   return `
     <div class="qr-box">
-      <p style="font-size:12.5px;">Escaneie o QR Code com o app do seu banco:</p>
-      <img src="${qrCodeUrl}" alt="QR Code Pix" style="width:200px;height:200px;display:block;margin:10px auto;border-radius:8px;">
+      ${qrCodeUrl ? `
+        <p style="font-size:12.5px;">Escaneie o QR Code com o app do seu banco:</p>
+        <img src="${qrCodeUrl}" alt="QR Code Pix" style="width:200px;height:200px;display:block;margin:10px auto;border-radius:8px;">
+      ` : ''}
       ${pixCopyPaste ? `
         <p style="font-size:12.5px;margin-top:10px;">Ou use o Pix Copia e Cola:</p>
         <div style="display:flex;gap:8px;margin-top:6px;">
@@ -2817,67 +2276,6 @@ function copyPixCode() {
   if (!input) return;
   input.select();
   navigator.clipboard?.writeText(input.value).catch(() => document.execCommand('copy'));
-}
-
-let paymentInFlight = false;
-
-async function confirmPayment() {
-  if (instantCheckoutMode) return confirmInstantPayment();
-  if (paymentInFlight) return; // trava contra duplo clique/toque — evita cobrar duas vezes
-  paymentInFlight = true;
-  const btn = document.getElementById('confirm-payment-btn');
-  const originalBtnText = btn.textContent;
-  btn.disabled = true;
-  btn.textContent = 'Processando...';
-
-  const errorEl = document.getElementById('payment-error');
-  errorEl.textContent = '';
-  const requestId = currentChat.requestId;
-  trackConversionEvent('AddPaymentInfo', { value: parseFloat((document.getElementById('pay-total').textContent || '').replace(/[^\d,]/g, '').replace(',', '.')) || undefined, currency: 'BRL' });
-
-  const body = { paymentMethod: payMethod };
-  if (appliedCoupon) body.couponCode = appliedCoupon.code;
-  if (payMethod === 'credit_card') {
-    const [expMonth, expYear] = (document.getElementById('card-expiry').value || '').split('/');
-    body.card = {
-      number: document.getElementById('card-number').value.replace(/\s/g, ''),
-      holderName: document.getElementById('card-holder').value,
-      expMonth: parseInt(expMonth, 10),
-      expYear: parseInt(expYear, 10),
-      cvv: document.getElementById('card-cvv').value,
-    };
-    body.billingAddress = {
-      line1: currentChat.address || user.street || 'Não informado',
-      zipCode: (document.getElementById('card-zip').value || '').replace(/\D/g, ''),
-      city: user.city || 'Não informado', state: user.state || 'PR',
-    };
-    if (selectedInstallments > 1) body.installments = selectedInstallments;
-  }
-
-  try {
-    const result = await api(`/requests/${requestId}/pay`, { method: 'POST', body });
-    lastPaymentContext = currentChat;
-    if (result.transaction?.status === 'paid') {
-      trackConversionEvent('Purchase', { value: parseFloat(result.transaction.amount), currency: 'BRL' });
-    }
-
-    const r = await api(`/requests/${requestId}`);
-    await renderConfirmFromRequest(r);
-    const pixPending = payMethod === 'pix' && !!result.qrCodeUrl;
-    document.getElementById('confirm-title').textContent = pixPending ? '⚠️ Falta pagar o Pix!' : 'Pagamento confirmado';
-    document.getElementById('confirm-sub').textContent = pixPending
-      ? 'O serviço só é confirmado depois que você pagar. Escaneie o QR Code ou copie o código Pix abaixo agora.'
-      : 'O prestador foi avisado. Combine os detalhes finais pelo chat.';
-    document.getElementById('qr-container').innerHTML = result.qrCodeUrl
-      ? `${pixPending ? '<div class="fee-note" style="background:var(--danger-tint);color:var(--danger);font-weight:700;"><span>⚠️</span><span>Isso ainda não confirmou o serviço — pague o Pix abaixo pra concluir.</span></div>' : ''}${pixQrBoxHTML(result.qrCodeUrl, result.pixCopyPaste)}`
-      : '';
-    showScreen('confirm');
-  } catch (err) {
-    errorEl.textContent = err.message;
-    btn.disabled = false;
-    btn.textContent = originalBtnText;
-    paymentInFlight = false;
-  }
 }
 
 function feeBreakdownHTML(tx) {
@@ -2939,11 +2337,9 @@ async function renderConfirmFromRequest(r) {
   const actions = document.getElementById('confirm-actions');
   let actionsHtml = '';
 
-  if (r.status === 'accepted' && user.role === 'client' && (!tx || tx.status === 'failed')) {
-    actionsHtml += `<div style="margin-bottom:14px;"><button class="btn btn-primary btn-block" onclick="payNow('${r.id}')">Pagar agora</button></div>`;
+  if (r.status === 'accepted' && user.role === 'client') {
+    actionsHtml += `<div style="margin-bottom:14px;"><button class="btn btn-ghost btn-block" onclick="confirmServiceCompletion('${r.id}', '${(r.provider_name || '').replace(/'/g, "\\'")}')">Já paguei o prestador direto — confirmar realização</button></div>`;
     actionsHtml += `<div style="margin-bottom:14px;"><button class="btn btn-ghost btn-block" style="color:var(--danger);border-color:var(--danger);" onclick="cancelRequest('${r.id}')">Cancelar pedido</button></div>`;
-  } else if (r.status === 'accepted' && user.role === 'client' && tx?.status === 'pending' && tx.payment_method === 'pix') {
-    actionsHtml += `<div style="margin-bottom:14px;"><button class="btn btn-ghost btn-block" onclick="payNow('${r.id}')">Já paguei / tentar outro método</button></div>`;
   }
 
   if (r.status === 'awaiting_approval' && user.role === 'client') {
@@ -2982,6 +2378,12 @@ async function renderConfirmFromRequest(r) {
   if (user.role === 'provider') loadContactUnlockCard(r.id);
 }
 
+const GUARANTEE_CLAIM_REASON_LABELS = {
+  numero_invalido: 'Número inválido',
+  numero_inexistente: 'Número inexistente',
+  numero_outra_pessoa: 'Número pertence a outra pessoa',
+};
+
 // Telefone do cliente só aparece pra quem assina o Plano PRO (libera sozinho
 // assim que o pagamento é confirmado). Quem não assina usa o chat do app —
 // já visível acima assim que o pagamento é confirmado — que filtra contato
@@ -2990,57 +2392,137 @@ async function loadContactUnlockCard(requestId) {
   const slot = document.getElementById('contact-unlock-slot');
   if (!slot) return;
   try {
-    const data = await api(`/provider/contact-unlock/${requestId}`);
-    if (data.unlocked) {
+    const data = await api(`/provider/unlock-contact/${requestId}`);
+    const slotsInfo = `<p style="font-size:11.5px;color:var(--ink-soft);margin-top:6px;">${data.contactUnlockCount} de ${data.contactUnlockSlotLimit} profissionais já liberaram este contato.</p>`;
+    if (data.alreadyUnlocked) {
+      const primeiroNomeCliente = (data.name || '').split(' ')[0];
+      const primeiroNomePrestador = (user.name || '').split(' ')[0];
+      const mensagemWhatsapp = `Olá ${primeiroNomeCliente}, sou ${primeiroNomePrestador} da NEXSERV, vi seu pedido de ${data.serviceName} e gostaria de conversar sobre os detalhes.`;
+      const waLink = data.phone ? `https://wa.me/55${data.phone.replace(/\D/g, '')}?text=${encodeURIComponent(mensagemWhatsapp)}` : null;
+      let guaranteeHtml;
+      if (!data.guaranteeClaim) {
+        guaranteeHtml = `<button class="btn btn-ghost btn-block btn-small" style="margin-top:8px;" onclick="openGuaranteeClaimModal('${data.unlockId}', '${requestId}')">Solicitar garantia de contato</button>`;
+      } else {
+        const reasonLabel = GUARANTEE_CLAIM_REASON_LABELS[data.guaranteeClaim.reason] || data.guaranteeClaim.reason;
+        if (data.guaranteeClaim.status === 'pending') {
+          guaranteeHtml = `<p style="font-size:12px;color:var(--ink-soft);margin-top:8px;">Solicitação de garantia (${esc(reasonLabel)}) em análise.</p>`;
+        } else if (data.guaranteeClaim.status === 'approved') {
+          guaranteeHtml = `<p style="font-size:12px;color:var(--success);margin-top:8px;">Garantia aprovada (${esc(reasonLabel)}).</p>`;
+        } else {
+          guaranteeHtml = `<p style="font-size:12px;color:var(--danger);margin-top:8px;">Garantia negada (${esc(reasonLabel)}): ${esc(data.guaranteeClaim.rejectReason || '')}</p>`;
+        }
+      }
       slot.innerHTML = `
         <div class="card">
           <strong style="font-size:14px;">Contato do cliente</strong>
-          <p style="font-size:13px;color:var(--ink-soft);margin:6px 0 0;">${data.name} · ${data.phone || 'telefone não informado'}</p>
+          <p style="font-size:13px;color:var(--ink-soft);margin:6px 0 10px;">${data.name} · ${data.phone || 'telefone não informado'}${data.email ? ' · ' + data.email : ''}</p>
+          ${waLink ? `<a class="btn btn-primary btn-block btn-small" href="${waLink}" target="_blank" rel="noopener">Abrir WhatsApp</a>` : ''}
+          <p style="font-size:11.5px;color:var(--ink-soft);margin-top:8px;">Após a realização do serviço, o cliente vai confirmar e avaliar — nesse momento será gerada a cobrança de 12% de taxa da NEXSERV via Pix.</p>
+          ${guaranteeHtml}
         </div>
       `;
-    } else if (data.paymentRequired) {
+    } else if (data.slotsFull) {
       slot.innerHTML = `
         <div class="card">
-          <strong style="font-size:14px;">Contato do cliente</strong>
-          <p style="font-size:12.5px;color:var(--ink-soft);margin:6px 0 0;">${data.isSubscriber ? 'Como assinante do Plano PRO, você vai ver o telefone deste cliente automaticamente assim que o pagamento for confirmado.' : 'Assim que o pagamento for confirmado, você pode conversar com o cliente pelo chat aqui no app.'}</p>
+          <strong style="font-size:14px;">Oportunidade encerrada</strong>
+          <p style="font-size:12.5px;color:var(--ink-soft);margin:6px 0 0;">O limite de ${data.contactUnlockSlotLimit} profissionais pra liberar o contato deste pedido já foi atingido.</p>
         </div>
       `;
-    } else if (data.quotaExceeded) {
+    } else if (data.isPro && data.proUnlocksRemaining > 0) {
+      const overage = Math.max(0, data.costInCoins - data.proCoverageCoins);
+      const proMsg = overage > 0
+        ? `Esta liberação custa ${data.costInCoins} moedas; seu crédito PRO cobre até ${data.proCoverageCoins}, então serão cobradas ${overage} moedas do seu saldo (atual: ${data.currentBalance}).`
+        : `Você tem ${data.proUnlocksRemaining} liberações grátis do Plano PRO neste ciclo.`;
+      const proButtonLabel = overage > 0
+        ? `Liberar contato (usa 1 de ${data.proUnlocksRemaining} restantes + ${overage} moedas)`
+        : `Liberar contato (usa 1 de ${data.proUnlocksRemaining} restantes)`;
       slot.innerHTML = `
         <div class="card">
           <strong style="font-size:14px;">Contato do cliente</strong>
-          <p style="font-size:12.5px;color:var(--ink-soft);margin:6px 0 10px;">Você já usou seus ${data.freeUnlocksUsed} contatos grátis do Plano PRO este mês (limite: ${data.freeUnlocksLimit}). Pode liberar este por ${data.coinUnlockCost} moedas, ou combinar pelo chat do app.</p>
+          <p style="font-size:12.5px;color:var(--ink-soft);margin:6px 0 10px;">${proMsg}</p>
           <div class="error-msg" id="contact-unlock-error-${requestId}"></div>
-          <button class="btn btn-primary btn-block btn-small" onclick="unlockContactWithCoins('${requestId}')">Liberar por ${data.coinUnlockCost} moedas</button>
+          <button class="btn btn-primary btn-block btn-small" onclick="unlockContact('${requestId}', ${overage > 0 ? overage : 'null'}, ${data.currentBalance})">${proButtonLabel}</button>
+          ${slotsInfo}
         </div>
       `;
-    } else if (data.isSubscriber) {
-      slot.innerHTML = `
-        <div class="card">
-          <strong style="font-size:14px;">Contato do cliente</strong>
-          <p style="font-size:12.5px;color:var(--ink-soft);margin:6px 0 0;">Carregando o telefone deste cliente...</p>
-        </div>
-      `;
-      setTimeout(() => loadContactUnlockCard(requestId), 1500);
     } else {
       slot.innerHTML = `
         <div class="card">
           <strong style="font-size:14px;">Contato do cliente</strong>
-          <p style="font-size:12.5px;color:var(--ink-soft);margin:6px 0 10px;">Use o botão "Enviar mensagem" acima pra combinar os detalhes com o cliente pelo chat do app. Assinantes do Plano PRO recebem o telefone automaticamente após o pagamento.</p>
-          <button class="btn btn-ghost btn-block btn-small" onclick="showScreen('provider-subscription'); loadSubscriptionStatus();">Conhecer o Plano PRO</button>
+          <p style="font-size:12.5px;color:var(--ink-soft);margin:6px 0 10px;">Saldo atual: ${data.currentBalance} moedas.</p>
+          <div class="error-msg" id="contact-unlock-error-${requestId}"></div>
+          <button class="btn btn-primary btn-block btn-small" onclick="unlockContact('${requestId}', ${data.costInCoins}, ${data.currentBalance})">Liberar contato — ${data.costInCoins} moedas</button>
+          ${slotsInfo}
         </div>
       `;
     }
   } catch { slot.innerHTML = ''; }
 }
 
-async function unlockContactWithCoins(requestId) {
+async function unlockContact(requestId, costInCoins, currentBalance) {
   const errorEl = document.getElementById(`contact-unlock-error-${requestId}`);
+  if (costInCoins != null && !confirm(`Vai gastar ${costInCoins} moedas. Saldo atual: ${currentBalance}. Confirmar?`)) return;
   try {
-    await api(`/provider/contact-unlock/${requestId}`, { method: 'POST' });
+    await api(`/provider/unlock-contact/${requestId}`, { method: 'POST' });
     await loadContactUnlockCard(requestId);
   } catch (err) {
-    if (errorEl) errorEl.textContent = err.message;
+    if (errorEl) {
+      errorEl.innerHTML = `${err.message}<br><button class="btn btn-ghost btn-small" style="margin-top:6px;" onclick="setTab('provider-earnings'); setEarningsTab('wallet');">Comprar moedas</button>`;
+    }
+  }
+}
+
+function openGuaranteeClaimModal(unlockId, requestId) {
+  if (document.getElementById('guarantee-claim-overlay')) return;
+  const overlay = document.createElement('div');
+  overlay.id = 'guarantee-claim-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px;overflow-y:auto;';
+  overlay.onclick = (e) => { if (e.target === overlay) closeGuaranteeClaimModal(); };
+  overlay.innerHTML = `
+    <div class="card" style="max-width:360px;width:100%;max-height:90vh;overflow-y:auto;">
+      <strong style="font-size:15px;">Solicitar garantia de contato</strong>
+      <div class="field" style="margin-top:12px;">
+        <label>Motivo</label>
+        <select id="guarantee-claim-reason">
+          <option value="">Selecione um motivo</option>
+          <option value="numero_invalido">Número inválido</option>
+          <option value="numero_inexistente">Número inexistente</option>
+          <option value="numero_outra_pessoa">Número pertence a outra pessoa</option>
+        </select>
+      </div>
+      <div class="field" style="margin-top:10px;">
+        <label>Detalhe (opcional)</label>
+        <textarea id="guarantee-claim-description" rows="3"></textarea>
+      </div>
+      <p style="font-size:11.5px;color:var(--ink-soft);margin-top:8px;">Sua solicitação será analisada pelo admin em até 72 horas.</p>
+      <div class="error-msg" id="guarantee-claim-error" style="margin-top:6px;"></div>
+      <div style="display:flex;gap:10px;margin-top:14px;">
+        <button class="btn btn-ghost" style="flex:1;" onclick="closeGuaranteeClaimModal()">Cancelar</button>
+        <button class="btn btn-primary" style="flex:1;" id="guarantee-claim-submit" onclick="submitGuaranteeClaim('${unlockId}', '${requestId}')" disabled>Enviar solicitação</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  document.getElementById('guarantee-claim-reason').addEventListener('change', (e) => {
+    document.getElementById('guarantee-claim-submit').disabled = !e.target.value;
+  });
+}
+
+function closeGuaranteeClaimModal() {
+  const overlay = document.getElementById('guarantee-claim-overlay');
+  if (overlay) overlay.remove();
+}
+
+async function submitGuaranteeClaim(unlockId, requestId) {
+  const reason = document.getElementById('guarantee-claim-reason').value;
+  const description = document.getElementById('guarantee-claim-description').value.trim();
+  const errorEl = document.getElementById('guarantee-claim-error');
+  try {
+    await api(`/provider/unlock-contact/${requestId}/guarantee-claim`, { method: 'POST', body: { reason, description: description || null } });
+    closeGuaranteeClaimModal();
+    await loadContactUnlockCard(requestId);
+  } catch (err) {
+    errorEl.textContent = err.message;
   }
 }
 
@@ -3062,6 +2544,17 @@ async function saveFullAddress(requestId) {
 
 async function approveCompletion(requestId, providerName) {
   await api(`/requests/${requestId}/approve-completion`, { method: 'POST' });
+  rateServiceRequestId = requestId;
+  selectedServiceRating = 0;
+  document.getElementById('rate-service-provider-name').textContent = providerName ? `Avalie o serviço de ${providerName}` : 'Avalie o serviço prestado';
+  document.getElementById('rate-service-comment').value = '';
+  document.getElementById('rate-service-error').textContent = '';
+  renderServiceStars();
+  showScreen('rate-service');
+}
+
+async function confirmServiceCompletion(requestId, providerName) {
+  await api(`/requests/${requestId}/confirm-completion`, { method: 'POST' });
   rateServiceRequestId = requestId;
   selectedServiceRating = 0;
   document.getElementById('rate-service-provider-name').textContent = providerName ? `Avalie o serviço de ${providerName}` : 'Avalie o serviço prestado';
@@ -3418,8 +2911,8 @@ async function submitVerification() {
   try {
     // Comprime uma foto de cada vez (não em paralelo) — decodificar várias
     // fotos de câmera em resolução original ao mesmo tempo (12MP+ cada) pode
-    // estourar a memória do WebView em celulares mais fracos e derrubar o
-    // app sem nenhum erro na tela.
+    // estourar a memória do navegador em celulares mais fracos e travar/fechar
+    // a aba sem nenhum erro na tela.
     documentFile = await compressImage(documentFile);
     selfieFile = await compressImage(selfieFile);
     diplomaFile = await compressImage(diplomaFile);
@@ -3472,184 +2965,40 @@ const BANK_CODES = [
   { code: '748', name: 'Sicredi' }, { code: '756', name: 'Sicoob' },
 ];
 
-let editingBankAccount = false;
-
-function editBankAccount() {
-  editingBankAccount = true;
-  loadWithdrawScreen();
-}
-
-function cancelEditBankAccount() {
-  editingBankAccount = false;
-  loadWithdrawScreen();
-}
-
-async function loadWithdrawScreen() {
-  const [bankAccount, withdrawals] = await Promise.all([
-    api('/provider/bank-account'),
-    api('/provider/withdrawals'),
-  ]);
-
-  document.getElementById('withdraw-available').textContent = money(withdrawals.availableBalance);
-
-  const bankSection = document.getElementById('bank-account-section');
-  const formSection = document.getElementById('withdraw-form-section');
-
-  if (bankAccount.registered && !editingBankAccount) {
-    bankSection.innerHTML = `
-      <div class="section-title"><h3>Conta bancária e Pix</h3></div>
-      <div class="card">
-        <strong style="font-size:14px;">${bankAccount.holderName}</strong>
-        <p style="font-size:12.5px;color:var(--ink-soft);margin:4px 0 0;">
-          ${(BANK_CODES.find((b) => b.code === bankAccount.bankCode) || {}).name || bankAccount.bankCode}
-          · Ag. ${bankAccount.branch} · Conta ${bankAccount.accountNumber}-${bankAccount.accountDigit}
-        </p>
-        <p style="font-size:12.5px;color:var(--ink-soft);margin:4px 0 0;">
-          Pix: ${(PIX_KEY_TYPES.find((t) => t.value === bankAccount.pixKeyType) || {}).label || bankAccount.pixKeyType} · ${bankAccount.pixKey}
-        </p>
-        <button class="btn btn-ghost btn-small" style="margin-top:10px;" onclick="editBankAccount()">Editar dados</button>
-      </div>
-    `;
-    formSection.style.display = 'block';
-    const dayNames = ['domingo', 'segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado'];
-    formSection.innerHTML = `
-      <div class="section-title"><h3>Solicitar saque de saldo</h3></div>
-      <div class="fee-note">
-        <span>ℹ️</span>
-        <span>Use isso só se sobrar algum saldo que não foi pago automaticamente. Saque mínimo de ${money(withdrawals.minWithdrawal)}. Taxa de transferência: ${money(withdrawals.fee)}. Sujeito à aprovação da administração — saques aprovados são pagos toda ${dayNames[withdrawals.payoutDay]}.</span>
-      </div>
-      <div class="field"><label>Valor a sacar (R$)</label><input type="number" id="withdraw-amount" min="${withdrawals.minWithdrawal}" step="0.01"></div>
-      <button class="btn btn-primary btn-block" onclick="requestWithdrawal()">Solicitar saque</button>
-      <div class="error-msg" id="withdraw-error"></div>
-    `;
-  } else {
-    formSection.style.display = 'none';
-    const prefill = editingBankAccount ? bankAccount : {};
-    const selectedBank = BANK_CODES.find((b) => b.code === prefill.bankCode);
-    bankSection.innerHTML = `
-      <div class="section-title"><h3>${editingBankAccount ? 'Editar dados bancários e chave Pix' : 'Cadastre sua conta bancária e chave Pix'}</h3></div>
-      <p style="font-size:12px;color:var(--ink-soft);margin:0 0 12px;">Precisa ser feito uma vez, antes do primeiro saque.</p>
-      <div class="field"><label>Nome completo do titular</label><input id="bank-holder-name" value="${prefill.holderName || user.name || ''}"></div>
-      <div class="field">
-        <label>CPF ou CNPJ do titular</label>
-        <input id="bank-holder-document" value="${prefill.holderDocument || user.document || ''}" readonly style="background:var(--bg);color:var(--ink-soft);">
-        <p style="font-size:11.5px;color:var(--ink-faint);margin:4px 0 0;">A conta e a chave Pix precisam estar no mesmo CPF/CNPJ do seu cadastro — não é possível sacar pra um documento diferente.</p>
-      </div>
-      <div class="field" style="position:relative;">
-        <label>Banco</label>
-        <input type="text" id="bank-search" placeholder="Digite o nome ou código do banco" autocomplete="off"
-          value="${selectedBank ? `${selectedBank.code} — ${selectedBank.name}` : ''}"
-          oninput="renderBankOptions(this.value)" onfocus="renderBankOptions(this.value)"
-          onblur="setTimeout(() => { document.getElementById('bank-options-list').style.display = 'none'; }, 150)">
-        <input type="hidden" id="bank-code" value="${prefill.bankCode || ''}">
-        <div id="bank-options-list" style="display:none;position:absolute;left:0;right:0;top:100%;z-index:20;background:var(--card-bg,#fff);border:1px solid var(--border);border-radius:8px;margin-top:4px;max-height:200px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,.1);"></div>
-      </div>
-      <div style="display:flex;gap:10px;">
-        <div class="field" style="flex:1;"><label>Agência</label><input id="bank-branch" placeholder="0000" value="${prefill.branch || ''}"></div>
-        <div class="field" style="flex:1;"><label>Conta</label><input id="bank-account-number" placeholder="00000" value="${prefill.accountNumber || ''}"></div>
-        <div class="field" style="width:70px;"><label>Dígito</label><input id="bank-account-digit" placeholder="0" value="${prefill.accountDigit || ''}"></div>
-      </div>
-      <div class="field">
-        <label>Tipo de conta</label>
-        <select id="bank-account-type">
-          <option value="checking" ${prefill.accountType === 'checking' ? 'selected' : ''}>Corrente</option>
-          <option value="savings" ${prefill.accountType === 'savings' ? 'selected' : ''}>Poupança</option>
-        </select>
-      </div>
-      <div class="field">
-        <label>Tipo de chave Pix</label>
-        <select id="pix-key-type">${PIX_KEY_TYPES.map((t) => `<option value="${t.value}" ${prefill.pixKeyType === t.value ? 'selected' : ''}>${t.label}</option>`).join('')}</select>
-      </div>
-      <div class="field"><label>Chave Pix</label><input id="pix-key" placeholder="CPF, e-mail, telefone ou chave aleatória" value="${prefill.pixKey || ''}"></div>
-
-      <button class="btn btn-primary btn-block" onclick="saveBankAccount()">Salvar dados bancários</button>
-      ${editingBankAccount ? `<button class="btn btn-ghost btn-block" style="margin-top:10px;" onclick="cancelEditBankAccount()">Cancelar</button>` : ''}
-      <div class="error-msg" id="bank-account-error"></div>
-    `;
-  }
-
-  document.getElementById('withdrawals-history').innerHTML = withdrawals.history.length
-    ? withdrawals.history.map((w) => `
-      <div class="req-card" style="cursor:default;">
-        <div class="row1"><span class="title">${money(w.amount)}</span>${withdrawalStatusPillHTML(w.status)}</div>
-        <div class="meta-row">${dateFmt(w.requested_at)}${w.fee > 0 ? ' · taxa ' + money(w.fee) : ''}</div>
-        ${w.status === 'failed' && w.admin_notes ? `<div style="font-size:11.5px;color:var(--danger);margin-top:4px;">${w.admin_notes}</div>` : ''}
-        ${w.status === 'processing' ? `<div style="font-size:11.5px;color:var(--ink-faint);margin-top:4px;">Transferência a caminho — pode levar algumas horas até confirmar.</div>` : ''}
-      </div>
-    `).join('')
-    : '<div class="empty-state"><span class="glyph">💸</span><p>Nenhum saque solicitado ainda.</p></div>';
-}
-
-function withdrawalStatusPillHTML(status) {
-  const labels = { pending: 'Aguardando aprovação', approved: 'Aprovado', processing: 'Transferência em análise', paid: 'Pago', rejected: 'Rejeitado', failed: 'Falhou' };
-  const classes = { pending: 'pending', approved: 'accepted', processing: 'accepted', paid: 'done', rejected: 'rejected', failed: 'rejected' };
+function commissionChargeStatusPillHTML(status) {
+  const labels = { pending: 'Aguardando pagamento', paid: 'Pago', failed: 'Falhou' };
+  const classes = { pending: 'pending', paid: 'done', failed: 'rejected' };
   return `<span class="pill ${classes[status] || 'pending'}">${labels[status] || status}</span>`;
 }
 
-function renderBankOptions(filterText) {
-  const list = document.getElementById('bank-options-list');
-  if (!list) return;
-  const q = (filterText || '').toLowerCase().trim();
-  const matches = BANK_CODES.filter((b) => b.name.toLowerCase().includes(q) || b.code.includes(q));
-  list.innerHTML = matches.length
-    ? matches.map((b) => `
-        <div style="padding:9px 12px;cursor:pointer;font-size:13px;" onmousedown="selectBank('${b.code}')">
-          <span class="mono" style="color:var(--ink-faint);">${b.code}</span> — ${b.name}
-        </div>
-      `).join('')
-    : '<div style="padding:9px 12px;font-size:13px;color:var(--ink-faint);">Nenhum banco encontrado</div>';
-  list.style.display = 'block';
-}
-
-function selectBank(code) {
-  const bank = BANK_CODES.find((b) => b.code === code);
-  document.getElementById('bank-code').value = code;
-  document.getElementById('bank-search').value = bank ? `${bank.code} — ${bank.name}` : code;
-  document.getElementById('bank-options-list').style.display = 'none';
-}
-
-async function saveBankAccount() {
-  const errorEl = document.getElementById('bank-account-error');
-  errorEl.textContent = '';
-  const body = {
-    holderName: document.getElementById('bank-holder-name').value.trim(),
-    holderDocument: document.getElementById('bank-holder-document').value.trim(),
-    bankCode: document.getElementById('bank-code').value,
-    branch: document.getElementById('bank-branch').value.trim(),
-    accountNumber: document.getElementById('bank-account-number').value.trim(),
-    accountDigit: document.getElementById('bank-account-digit').value.trim(),
-    accountType: document.getElementById('bank-account-type').value,
-    pixKey: document.getElementById('pix-key').value.trim(),
-    pixKeyType: document.getElementById('pix-key-type').value,
-  };
-  if (!body.holderName || !body.holderDocument || !body.pixKey || !body.pixKeyType) {
-    errorEl.textContent = 'Preencha o titular, documento e a chave Pix.';
+async function loadProviderInvoicesScreen() {
+  const listEl = document.getElementById('provider-invoices-list');
+  listEl.innerHTML = '<p style="font-size:13px;color:var(--ink-soft);">Carregando...</p>';
+  let charges;
+  try {
+    charges = await api('/provider/commission-charges');
+  } catch {
+    listEl.innerHTML = '<p style="font-size:13px;color:var(--ink-soft);">Não foi possível carregar suas faturas agora.</p>';
     return;
   }
-  if (!body.bankCode || !body.branch || !body.accountNumber || !body.accountDigit) {
-    errorEl.textContent = 'Preencha todos os dados bancários (selecione o banco na busca).';
+
+  if (!charges.length) {
+    listEl.innerHTML = '<div class="empty-state"><span class="glyph">🧾</span><p>Nenhuma fatura de taxa ainda.</p></div>';
     return;
   }
-  try {
-    await api('/provider/bank-account', { method: 'POST', body });
-    editingBankAccount = false;
-    loadWithdrawScreen();
-  } catch (err) {
-    errorEl.textContent = err.message;
-  }
-}
 
-async function requestWithdrawal() {
-  const errorEl = document.getElementById('withdraw-error');
-  errorEl.textContent = '';
-  const amount = parseFloat(document.getElementById('withdraw-amount').value);
-  if (!amount || amount <= 0) { errorEl.textContent = 'Informe um valor válido.'; return; }
-  try {
-    await api('/provider/withdrawals', { method: 'POST', body: { amount } });
-    loadWithdrawScreen();
-  } catch (err) {
-    errorEl.textContent = err.message;
-  }
+  const mostRecentPending = charges.find((c) => c.status === 'pending');
+
+  listEl.innerHTML = charges.map((c) => {
+    const isFeaturedPending = mostRecentPending && c.id === mostRecentPending.id;
+    return `
+      <div class="req-card" style="cursor:default;">
+        <div class="row1"><span class="title">${esc(c.serviceName)}</span>${commissionChargeStatusPillHTML(c.status)}</div>
+        <div class="meta-row">${money(c.amount)} · ${dateFmt(c.createdAt)}</div>
+        ${isFeaturedPending ? pixQrBoxHTML(c.qrCodeUrl, c.pixCopyPaste) : ''}
+      </div>
+    `;
+  }).join('');
 }
 
 let editingProposalId = null;
@@ -3813,13 +3162,10 @@ async function loadProviderJobs() {
               ? '<span class="badge-featured">⭐ Proposta em destaque</span>'
               : `<button class="btn btn-ghost btn-small" onclick="event.stopPropagation();featureProposal('${p.id}')">Destacar por ${PROPOSAL_FEATURE_COST} moedas</button>`}
             ${remindClientButtonHTML(p, subStatus.active)}
-          </div>
-          <div id="chat-unlock-${p.request_id}" style="margin-top:8px;"></div>` : ''}
+            <button class="btn btn-ghost btn-small" onclick="event.stopPropagation();openChatThread('${p.request_id}','${p.client_id}','${(p.client_name || '').replace(/'/g, "\\'")}')">💬 Abrir chat</button>
+          </div>` : ''}
       </div>
     `).join('') : '<div class="empty-state"><span class="glyph">📨</span><p>Você ainda não enviou nenhuma proposta.</p></div>';
-    proposals.filter((p) => p.status === 'pending').forEach((p) => {
-      loadChatUnlockCard(p.request_id, p.client_id, (p.client_name || '').replace(/'/g, "\\'"));
-    });
   }
 }
 
@@ -3844,42 +3190,6 @@ async function remindClientDecision(proposalId) {
   } catch (err) {
     alert(err.message);
     if (btn) { btn.disabled = false; btn.textContent = '📣 Cobrar decisão'; }
-  }
-}
-
-// Chat trava assim que a proposta é enviada (antes disso ficava livre pra
-// tirar dúvida — ver botão na tela de orçamento). Assinante Plano PRO abre
-// direto; quem não assina paga com moedas pra liberar aquele pedido
-// específico. Mesmo padrão visual do desbloqueio de contato pós-pagamento.
-async function loadChatUnlockCard(requestId, clientId, clientName) {
-  const slot = document.getElementById(`chat-unlock-${requestId}`);
-  if (!slot) return;
-  try {
-    const data = await api(`/provider/chat-unlock/${requestId}`);
-    if (data.unlocked) {
-      slot.innerHTML = `<button class="btn btn-ghost btn-small" onclick="event.stopPropagation();openChatThread('${requestId}','${clientId}','${clientName}')">💬 Abrir chat</button>`;
-    } else {
-      slot.innerHTML = `
-        <div class="card" style="margin-top:4px;">
-          <p style="font-size:12.5px;color:var(--ink-soft);margin:0 0 8px;">Chat travado após o envio da proposta. Assine o Plano PRO ou libere só este pedido por ${data.coinUnlockCost} moedas.</p>
-          <div class="error-msg" id="chat-unlock-error-${requestId}"></div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;">
-            <button class="btn btn-primary btn-small" onclick="event.stopPropagation();unlockChatWithCoins('${requestId}','${clientId}','${clientName}')">Liberar por ${data.coinUnlockCost} moedas</button>
-            <button class="btn btn-ghost btn-small" onclick="event.stopPropagation();showScreen('provider-subscription'); loadSubscriptionStatus();">Conhecer o Plano PRO</button>
-          </div>
-        </div>
-      `;
-    }
-  } catch { slot.innerHTML = ''; }
-}
-
-async function unlockChatWithCoins(requestId, clientId, clientName) {
-  const errorEl = document.getElementById(`chat-unlock-error-${requestId}`);
-  try {
-    await api(`/provider/chat-unlock/${requestId}`, { method: 'POST' });
-    await loadChatUnlockCard(requestId, clientId, clientName);
-  } catch (err) {
-    if (errorEl) errorEl.textContent = err.message;
   }
 }
 
@@ -3970,7 +3280,27 @@ async function loadEarningsScreen() {
 }
 
 async function loadEarnings() {
-  const data = await api('/provider/earnings');
+  const upsellEl = document.getElementById('earnings-summary-upsell');
+  const contentEl = document.getElementById('earnings-summary-content');
+  let data;
+  try {
+    data = await api('/provider/earnings');
+  } catch (err) {
+    contentEl.style.display = 'none';
+    upsellEl.style.display = 'block';
+    upsellEl.innerHTML = `
+      <div class="card" style="text-align:center;padding:24px 16px;">
+        <div style="font-size:32px;">⭐</div>
+        <strong style="font-size:15px;">Resumo de ganhos é do Plano PRO</strong>
+        <p style="font-size:13px;color:var(--ink-soft);margin:8px 0 16px;">Acompanhe o que já foi liberado e o que está retido aguardando aprovação. Assine o Plano PRO para liberar.</p>
+        <button class="btn btn-primary btn-block btn-small" onclick="showScreen('provider-subscription'); loadSubscriptionStatus();">Conhecer o Plano PRO</button>
+      </div>
+    `;
+    return;
+  }
+  upsellEl.style.display = 'none';
+  contentEl.style.display = 'block';
+
   document.getElementById('earnings-released').textContent = money(data.releasedTotal);
   document.getElementById('earnings-held').textContent = money(data.heldTotal);
   document.getElementById('earnings-list').innerHTML = data.transactions.length
@@ -4070,7 +3400,11 @@ async function loadWallet() {
   document.getElementById('coins-balance').textContent = balanceData.balance;
   document.getElementById('coin-packages').innerHTML = packages.map((p) => `
     <div class="req-card" onclick="selectCoinPackage('${p.id}')">
-      <div class="row1"><span class="title">${p.coins} moedas</span><span class="price" style="font-size:15px;">${money(p.price)}</span></div>
+      <div class="row1"><span class="title">${p.coins} moedas</span><span class="price" style="font-size:15px;">${
+        p.finalPrice != null && p.finalPrice !== p.price
+          ? `<span style="text-decoration:line-through;color:var(--ink-faint);">${money(p.price)}</span> ${money(p.finalPrice)}`
+          : money(p.price)
+      }</span></div>
     </div>
   `).join('');
   document.getElementById('coin-payment-form').style.display = 'none';
@@ -4147,6 +3481,80 @@ async function confirmCoinPurchase() {
       document.getElementById('coin-qr-container').innerHTML = pixQrBoxHTML(result.qrCodeUrl, result.pixCopyPaste);
     } else {
       await loadWallet();
+    }
+  } catch (err) {
+    errorEl.textContent = err.message;
+  }
+}
+
+let selectedClientCoinPackage = null;
+let clientCoinPayMethod = 'pix';
+
+// Abre a tela da carteira do cliente e carrega o saldo/pacotes — separado do
+// onclick inline pra não deixar uma promise rejeitada solta (unhandled
+// rejection) se /client/coins/balance ou /client/coins/packages falhar.
+function openClientWallet() {
+  showScreen('client-wallet');
+  loadClientWallet().catch((err) => console.error('Falha ao carregar carteira do cliente:', err.message));
+}
+
+async function loadClientWallet() {
+  const [balanceData, packages] = await Promise.all([
+    api('/client/coins/balance'),
+    api('/client/coins/packages'),
+  ]);
+  document.getElementById('client-coins-balance').textContent = balanceData.balance;
+  document.getElementById('client-coin-packages').innerHTML = packages.map((p) => `
+    <div class="req-card" onclick="selectClientCoinPackage('${p.id}')">
+      <div class="row1"><span class="title">${p.coins} moedas</span><span class="price" style="font-size:15px;">${money(p.price)}</span></div>
+    </div>
+  `).join('');
+  document.getElementById('client-coin-payment-form').style.display = 'none';
+  selectedClientCoinPackage = null;
+}
+
+function selectClientCoinPackage(packageId) {
+  selectedClientCoinPackage = packageId;
+  document.getElementById('client-coin-payment-form').style.display = 'block';
+  document.getElementById('client-coin-purchase-error').textContent = '';
+  document.getElementById('client-coin-qr-container').innerHTML = '';
+}
+
+function selectClientCoinPayMethod(el) {
+  document.querySelectorAll('#client-coin-payment-form .pay-method').forEach((m) => m.classList.remove('selected'));
+  el.classList.add('selected');
+  clientCoinPayMethod = el.dataset.method;
+  document.getElementById('client-coin-card-fields').style.display = clientCoinPayMethod === 'credit_card' ? 'block' : 'none';
+}
+
+async function confirmClientCoinPurchase() {
+  const errorEl = document.getElementById('client-coin-purchase-error');
+  errorEl.textContent = '';
+  if (!selectedClientCoinPackage) return;
+
+  const body = { packageId: selectedClientCoinPackage, paymentMethod: clientCoinPayMethod };
+  if (clientCoinPayMethod === 'credit_card') {
+    const [expMonth, expYear] = (document.getElementById('client-coin-card-expiry').value || '').split('/');
+    body.card = {
+      number: document.getElementById('client-coin-card-number').value.replace(/\s/g, ''),
+      holderName: document.getElementById('client-coin-card-holder').value,
+      expMonth: parseInt(expMonth, 10),
+      expYear: parseInt(expYear, 10),
+      cvv: document.getElementById('client-coin-card-cvv').value,
+    };
+    body.billingAddress = {
+      line1: user.street || 'Não informado',
+      zipCode: (document.getElementById('client-coin-card-zip').value || '').replace(/\D/g, ''),
+      city: user.city || 'Não informado', state: user.state || 'SP',
+    };
+  }
+
+  try {
+    const result = await api('/client/coins/purchase', { method: 'POST', body });
+    if (result.qrCodeUrl) {
+      document.getElementById('client-coin-qr-container').innerHTML = pixQrBoxHTML(result.qrCodeUrl, result.pixCopyPaste);
+    } else {
+      await loadClientWallet();
     }
   } catch (err) {
     errorEl.textContent = err.message;
@@ -4512,14 +3920,14 @@ async function loadProfile() {
 
     statsSection.innerHTML = '';
     shortcuts.innerHTML = `
-      <div class="shortcut-card" onclick="setTab('provider-earnings')"><div class="icon" style="background:var(--primary-tint);color:var(--primary-dark);">💰</div><div class="txt"><strong>Carteira</strong><span>Moedas e ganhos</span></div></div>
+      <div class="shortcut-card" onclick="setTab('provider-earnings'); setEarningsTab('wallet');"><div class="icon" style="background:var(--primary-tint);color:var(--primary-dark);">💰</div><div class="txt"><strong>Carteira</strong><span>Moedas e ganhos</span></div></div>
       <div class="shortcut-card" onclick="setTab('provider-jobs')"><div class="icon" style="background:var(--info-tint);color:var(--info);">🧰</div><div class="txt"><strong>Trabalhos</strong><span>Meus serviços</span></div></div>
       <div class="shortcut-card" onclick="showScreen('referral')" data-load="referral"><div class="icon" style="background:var(--purple-tint);color:var(--purple);">🎁</div><div class="txt"><strong>Indique e ganhe</strong><span>Compartilhe seu código</span></div></div>
       <div class="shortcut-card" onclick="showScreen('provider-verification')"><div class="icon" style="background:var(--success-tint);color:var(--success);">🪪</div><div class="txt"><strong>Verificação</strong><span>Documento e selfie</span></div></div>
       <div class="shortcut-card" onclick="showScreen('provider-categories')"><div class="icon" style="background:var(--info-tint);color:var(--info);">🏷️</div><div class="txt"><strong>Categorias</strong><span>O que você atende</span></div></div>
       <div class="shortcut-card" onclick="showScreen('provider-installments')" data-load="provider-installments"><div class="icon" style="background:var(--purple-tint);color:var(--purple);">💳</div><div class="txt"><strong>Parcelamento</strong><span>Taxas e até 6x no cartão</span></div></div>
       <div class="shortcut-card" onclick="showScreen('provider-portfolio')" data-load="provider-portfolio"><div class="icon" style="background:var(--info-tint);color:var(--info);">📸</div><div class="txt"><strong>Fotos e sobre você</strong><span>Descrição e trabalhos realizados</span></div></div>
-      <div class="shortcut-card" onclick="openHowItWorks('profile')"><div class="icon" style="background:var(--warning-tint);color:var(--warning);">ℹ️</div><div class="txt"><strong>Como funciona</strong><span>Comissão, moedas e saque</span></div></div>
+      <div class="shortcut-card" onclick="openHowItWorks('profile')"><div class="icon" style="background:var(--warning-tint);color:var(--warning);">ℹ️</div><div class="txt"><strong>Como funciona</strong><span>Taxa, moedas e faturas</span></div></div>
       <div class="shortcut-card" onclick="callSupport()"><div class="icon" style="background:var(--success-tint);color:var(--success);">💬</div><div class="txt"><strong>Suporte</strong><span>Fale pelo WhatsApp</span></div></div>
       <div class="shortcut-card" onclick="showScreen('provider-subscription'); loadSubscriptionStatus();"><div class="icon" style="background:var(--warning-tint);color:var(--warning);">⭐</div><div class="txt"><strong>Plano PRO</strong><span>Destaque e prioridade</span></div></div>
     `;
@@ -4545,6 +3953,7 @@ async function loadProfile() {
 
     shortcuts.innerHTML = `
       <div class="shortcut-card" onclick="setTab('my-requests')"><div class="icon" style="background:var(--info-tint);color:var(--info);">📋</div><div class="txt"><strong>Meus pedidos</strong><span>Acompanhe suas solicitações</span></div></div>
+      <div class="shortcut-card" onclick="openClientWallet();"><div class="icon" style="background:var(--warning-tint);color:var(--warning);">🪙</div><div class="txt"><strong>Minhas moedas</strong><span>Comprar e ver saldo</span></div></div>
       <div class="shortcut-card" onclick="showScreen('favorites')"><div class="icon" style="background:var(--danger-tint);color:var(--danger);">♥</div><div class="txt"><strong>Favoritos</strong><span>Prestadores salvos</span></div></div>
       <div class="shortcut-card" onclick="showScreen('referral')"><div class="icon" style="background:var(--purple-tint);color:var(--purple);">🎁</div><div class="txt"><strong>Indique e ganhe</strong><span>Compartilhe seu código</span></div></div>
       <div class="shortcut-card" onclick="openComingSoon('Minhas avaliações')"><div class="icon" style="background:var(--warning-tint);color:var(--warning);">⭐</div><div class="txt"><strong>Avaliações</strong><span>Em breve</span></div></div>
@@ -4673,13 +4082,6 @@ async function renderFavoritesScreen() {
 
 // ---------- Todos os profissionais ----------
 let allProvidersCategory = null;
-let allProvidersOnlyFixedPrice = false;
-
-function viewProvidersForRequestCategory() {
-  allProvidersCategory = requestDraft?.category || null;
-  allProvidersOnlyFixedPrice = true;
-  showScreen('all-providers');
-}
 
 async function renderAllProvidersScreen() {
   const el = document.getElementById('all-providers-list');
@@ -4687,19 +4089,11 @@ async function renderAllProvidersScreen() {
   const fallbackLink = document.getElementById('all-providers-fallback-link');
   document.getElementById('all-providers-title').textContent = allProvidersCategory || 'Profissionais';
   sortWrap.style.display = allProvidersCategory ? '' : 'none';
-  if (allProvidersOnlyFixedPrice && allProvidersCategory) {
-    fallbackLink.style.display = '';
-    fallbackLink.innerHTML = `<button class="btn btn-ghost btn-block btn-small" onclick="openRequestForm('${allProvidersCategory.replace(/'/g, "\\'")}','${allProvidersCategory.replace(/'/g, "\\'")}')">Prefiro pedir orçamento</button>`;
-  } else {
-    fallbackLink.style.display = 'none';
-    fallbackLink.innerHTML = '';
-  }
-  const sort = allProvidersCategory ? document.getElementById('all-providers-sort').value : '';
+  fallbackLink.style.display = 'none';
+  fallbackLink.innerHTML = '';
   el.innerHTML = '<div class="empty-state" style="padding:40px 20px;"><p>Carregando...</p></div>';
   const params = new URLSearchParams();
   if (allProvidersCategory) params.set('category', allProvidersCategory);
-  if (sort) params.set('sort', sort);
-  if (allProvidersOnlyFixedPrice) params.set('onlyFixedPrice', 'true');
   const providers = await api(`/providers/directory/list?${params.toString()}`);
   el.innerHTML = providers.length ? `<div class="provider-grid">${providers.map((p) => `
     <div class="p-card" onclick="viewProviderProfile('${p.id}','all-providers')">
@@ -4707,12 +4101,8 @@ async function renderAllProvidersScreen() {
       <div class="p-name">${firstNameLastInitial(p.name)}${p.is_founder ? ' 🏆' : ''}${p.is_subscriber ? ' ⭐' : ''}${p.featured ? '<span class="badge-featured">★</span>' : ''}</div>
       <div class="p-role">${(p.categories || [])[0] || 'Prestador'}</div>
       <div class="p-rating">★ ${p.rating_avg ? parseFloat(p.rating_avg).toFixed(1) : '—'} (${p.rating_count || 0})</div>
-      ${p.min_catalog_price != null ? `<div class="p-role" style="color:var(--primary);font-weight:700;">a partir de ${money(p.min_catalog_price)}</div>` : ''}
-      ${p.has_km_rate ? `<div class="p-role" style="color:var(--primary);font-weight:700;">preço por km</div>` : ''}
     </div>
-  `).join('')}</div>` : (allProvidersOnlyFixedPrice
-    ? '<div class="empty-state"><span class="glyph">🔍</span><p>Nenhum prestador com preço fixo nessa categoria ainda. Peça um orçamento normal, ou volte mais tarde.</p></div>'
-    : '<div class="empty-state"><span class="glyph">🔍</span><p>Nenhum profissional cadastrado ainda.</p></div>');
+  `).join('')}</div>` : '<div class="empty-state"><span class="glyph">🔍</span><p>Nenhum profissional cadastrado ainda.</p></div>';
 }
 
 const _origShowScreen = showScreen;
@@ -4722,13 +4112,10 @@ showScreen = function (id) {
   if (id === 'all-providers') renderAllProvidersScreen();
   if (id === 'referral') renderReferralScreen();
   if (id === 'select-city') loadCityList();
-  if (id === 'provider-withdraw') loadWithdrawScreen();
+  if (id === 'provider-invoices') loadProviderInvoicesScreen();
   if (id === 'provider-categories') loadProviderCategoriesScreen();
   if (id === 'provider-installments') loadProviderInstallmentsScreen();
   if (id === 'provider-portfolio') loadProviderPortfolioScreen();
-  if (id === 'instant-services') renderInstantServicesScreen();
-  if (id === 'instant-searching') startInstantSearchingPoll();
-  else stopInstantSearchingPoll();
   if (id === 'instant-offers') loadInstantOffers();
   if (id === 'provider-offer-preferences') loadOfferPreferencesScreen();
 };
