@@ -99,7 +99,7 @@ let selectedInstallments = 1;
 let installmentsEligible = false;
 const MIN_INSTALLMENT_AMOUNT = 300;
 const MIN_SERVICE_VALUE = 100;
-let jobsTab = 'active';
+let jobsTab = 'proposals';
 let messagesTab = 'all';
 let currentChat = null; // { requestId, otherName, otherId }
 let chatSocket = null;
@@ -2246,13 +2246,6 @@ async function acceptProposal(btn, requestId, proposalId, providerName, value) {
 
 // ---------- Pagamento ----------
 
-// Mesma fórmula do backend (src/config/anticipation.js) — parcelar libera o
-// valor pro prestador na hora em vez de esperar as parcelas (antecipação
-// automática, já ligada na conta), e esse custo é embutido no total cobrado
-// do cliente. Duplicado aqui só pra mostrar o valor certo ANTES de pagar;
-// quem calcula o valor de verdade cobrado é sempre o backend.
-const ANTICIPATION_RATE_MONTHLY = 0.016;
-
 function pixQrBoxHTML(qrCodeUrl, pixCopyPaste) {
   return `
     <div class="qr-box">
@@ -2764,13 +2757,6 @@ async function ensureProviderFeeRate() {
   return providerFeeRateCache;
 }
 
-// Taxas fixas conhecidas (Pix 1,19% + antecipação automática 1,6% no à
-// vista — mesmas constantes do backend, ver src/config/anticipation.js) e uma
-// estimativa pública pra taxa de cartão (a taxa real vem do gateway na hora
-// do pagamento, essa aqui é só pra dar uma ideia antes do cliente pagar).
-const PROPOSAL_PIX_FEE_RATE = 0.0119;
-const PROPOSAL_ESTIMATED_CARD_FEE_RATE = 0.0349;
-
 async function updateProposalCommissionPreview() {
   const preview = document.getElementById('proposal-commission-preview');
   const value = parseMoneyInput(document.getElementById('proposal-value').value);
@@ -2778,18 +2764,11 @@ async function updateProposalCommissionPreview() {
   const feeRate = await ensureProviderFeeRate();
   if (feeRate == null) { preview.style.display = 'none'; return; }
   const commissionValue = Math.round(value * (feeRate / 100) * 100) / 100;
-  const afterCommission = value - commissionValue;
-
-  const cardFee = Math.round(value * (PROPOSAL_ESTIMATED_CARD_FEE_RATE + ANTICIPATION_RATE_MONTHLY) * 100) / 100;
-  const pixFee = Math.round(value * PROPOSAL_PIX_FEE_RATE * 100) / 100;
 
   document.getElementById('proposal-commission-value').textContent = money(value);
-  document.getElementById('proposal-commission-rate-label').textContent = `Taxa da plataforma (${feeRate}%)`;
+  document.getElementById('proposal-commission-net').textContent = money(value);
+  document.getElementById('proposal-commission-rate-label').textContent = `Taxa da NEXSERV (${feeRate}%)`;
   document.getElementById('proposal-commission-fee').textContent = `- ${money(commissionValue)}`;
-  document.getElementById('proposal-commission-card-fee').textContent = `- ${money(cardFee)}`;
-  document.getElementById('proposal-commission-net-card').textContent = money(Math.round((afterCommission - cardFee) * 100) / 100);
-  document.getElementById('proposal-commission-pix-fee').textContent = `- ${money(pixFee)}`;
-  document.getElementById('proposal-commission-net-pix').textContent = money(Math.round((afterCommission - pixFee) * 100) / 100);
   preview.style.display = 'block';
 }
 
@@ -3077,6 +3056,20 @@ function openEditProposal(proposalId, requestId, serviceName, category, currentV
   showScreen('submit-proposal');
 }
 
+// Clique no card de "Minhas propostas" — pendente ainda não tem pedido
+// aceito pra abrir tela de confirmação, então cai na edição da proposta
+// (mesmo destino do botão "Editar valor"); qualquer outro status já tem um
+// pedido de verdade por trás, abre os detalhes dele.
+async function openProposalCard(proposalId, requestId, status, serviceName, category, value, notes, clientId, clientName) {
+  if (status === 'pending') {
+    openEditProposal(proposalId, requestId, serviceName, category, value, notes, clientId, clientName);
+  } else {
+    const r = await api(`/requests/${requestId}`);
+    await renderConfirmFromRequest(r);
+    showScreen('confirm');
+  }
+}
+
 // Botão "Tirar dúvida com o cliente" dentro da tela de orçamento — abre o
 // chat da própria thread (pedido + este prestador) sem sair do fluxo de
 // proposta, pra ele perguntar algo (ex: "é com material ou só instalação?")
@@ -3151,21 +3144,73 @@ async function loadProviderJobs() {
       api('/provider/subscription/status').catch(() => ({ active: false })),
     ]);
     el.innerHTML = proposals.length ? proposals.map((p) => `
-      <div class="req-card" style="cursor:default;">
-        <div class="row1"><span class="title">${p.service_name}</span>${statusPillHTML(p.status)}</div>
-        <div class="meta-row">${p.category} · ${money(p.value)} · ${dateFmt(p.created_at)}</div>
-        ${p.notes ? `<div style="font-size:12.5px;color:var(--ink-soft);margin-top:4px;">${p.notes}</div>` : ''}
-        ${p.status === 'pending' ? `
-          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
-            <button class="btn btn-ghost btn-small" onclick="event.stopPropagation();openEditProposal('${p.id}','${p.request_id}','${p.service_name.replace(/'/g, "\\'")}','${p.category}',${p.value},'${(p.notes || '').replace(/'/g, "\\'").replace(/\n/g, ' ')}','${p.client_id}','${(p.client_name || '').replace(/'/g, "\\'")}')">Editar valor</button>
-            ${p.featured
-              ? '<span class="badge-featured">⭐ Proposta em destaque</span>'
-              : `<button class="btn btn-ghost btn-small" onclick="event.stopPropagation();featureProposal('${p.id}')">Destacar por ${PROPOSAL_FEATURE_COST} moedas</button>`}
-            ${remindClientButtonHTML(p, subStatus.active)}
-            <button class="btn btn-ghost btn-small" onclick="event.stopPropagation();openChatThread('${p.request_id}','${p.client_id}','${(p.client_name || '').replace(/'/g, "\\'")}')">💬 Abrir chat</button>
-          </div>` : ''}
+      <div class="rq-item" onclick="openProposalCard('${p.id}','${p.request_id}','${p.status}','${p.service_name.replace(/'/g, "\\'")}','${p.category}',${p.value},'${(p.notes || '').replace(/'/g, "\\'").replace(/\n/g, ' ')}','${p.client_id}','${(p.client_name || '').replace(/'/g, "\\'")}')">
+        <div class="rq-icon">${categoryIcon[p.category] || '🛠️'}</div>
+        <div class="rq-body">
+          <div class="rq-title">${esc(p.service_name)}</div>
+          <div class="rq-sub">${esc(p.category)} · ${money(p.value)}</div>
+          ${p.notes ? `<div style="font-size:12.5px;color:var(--ink-soft);margin-top:4px;">${esc(p.notes)}</div>` : ''}
+          <div class="rq-foot">
+            <span class="rq-date">${dateFmt(p.created_at)}</span>
+            ${statusPillHTML(p.status)}
+          </div>
+          ${p.status === 'pending' ? `
+            <div id="proposal-contact-slot-${p.id}"></div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
+              <button class="btn btn-ghost btn-small" onclick="event.stopPropagation();openEditProposal('${p.id}','${p.request_id}','${p.service_name.replace(/'/g, "\\'")}','${p.category}',${p.value},'${(p.notes || '').replace(/'/g, "\\'").replace(/\n/g, ' ')}','${p.client_id}','${(p.client_name || '').replace(/'/g, "\\'")}')">Editar valor</button>
+              ${p.featured
+                ? '<span class="badge-featured">⭐ Proposta em destaque</span>'
+                : `<button class="btn btn-ghost btn-small" onclick="event.stopPropagation();featureProposal('${p.id}')">Destacar por ${PROPOSAL_FEATURE_COST} moedas</button>`}
+              ${remindClientButtonHTML(p, subStatus.active)}
+              <button class="btn btn-ghost btn-small" id="proposal-chat-btn-${p.id}" onclick="event.stopPropagation();openChatThread('${p.request_id}','${p.client_id}','${(p.client_name || '').replace(/'/g, "\\'")}')">💬 Abrir chat</button>
+            </div>` : ''}
+        </div>
       </div>
     `).join('') : '<div class="empty-state"><span class="glyph">📨</span><p>Você ainda não enviou nenhuma proposta.</p></div>';
+    proposals.filter((p) => p.status === 'pending').forEach((p) => loadProposalContactUnlock(p.id, p.request_id));
+  }
+}
+
+async function loadProposalContactUnlock(proposalId, requestId) {
+  const slot = document.getElementById(`proposal-contact-slot-${proposalId}`);
+  if (!slot) return;
+  try {
+    const data = await api(`/provider/unlock-contact/${requestId}`);
+    slot.innerHTML = proposalContactUnlockHTML(data, proposalId, requestId);
+    if (data.alreadyUnlocked) {
+      const chatBtn = document.getElementById(`proposal-chat-btn-${proposalId}`);
+      if (chatBtn) chatBtn.style.display = 'none';
+    }
+  } catch { /* silencioso — não trava o card por causa disso */ }
+}
+
+// Versão compacta do card de liberar contato (ver loadContactUnlockCard, tela
+// de confirmação) pra caber na linha de ações do card de proposta — mesma
+// lógica de custo/PRO/vagas, só sem o texto explicativo longo.
+function proposalContactUnlockHTML(data, proposalId, requestId) {
+  if (data.alreadyUnlocked) {
+    const waLink = data.phone ? `https://wa.me/55${data.phone.replace(/\D/g, '')}` : null;
+    return `
+      <div style="font-size:12px;color:var(--success);font-weight:600;margin-top:8px;">✓ ${esc(data.name)}${data.phone ? ' · ' + esc(data.phone) : ''}</div>
+      ${waLink ? `<a class="btn btn-primary btn-small" style="margin-top:8px;" href="${waLink}" target="_blank" rel="noopener" onclick="event.stopPropagation();">Abrir WhatsApp</a>` : ''}
+    `;
+  }
+  if (data.slotsFull) return '';
+  if (data.isPro && data.proUnlocksRemaining > 0) {
+    const overage = Math.max(0, data.costInCoins - data.proCoverageCoins);
+    const label = overage > 0 ? `Liberar contato (+${overage} moedas)` : 'Liberar contato (grátis PRO)';
+    return `<button class="btn btn-primary btn-small" style="margin-top:8px;" onclick="event.stopPropagation();unlockContactFromProposal('${proposalId}','${requestId}',${overage > 0 ? overage : 'null'},${data.currentBalance})">${label}</button>`;
+  }
+  return `<button class="btn btn-primary btn-small" style="margin-top:8px;" onclick="event.stopPropagation();unlockContactFromProposal('${proposalId}','${requestId}',${data.costInCoins},${data.currentBalance})">Liberar contato — ${data.costInCoins} moedas</button>`;
+}
+
+async function unlockContactFromProposal(proposalId, requestId, costInCoins, currentBalance) {
+  if (costInCoins != null && !confirm(`Vai gastar ${costInCoins} moedas. Saldo atual: ${currentBalance}. Confirmar?`)) return;
+  try {
+    await api(`/provider/unlock-contact/${requestId}`, { method: 'POST' });
+    await loadProposalContactUnlock(proposalId, requestId);
+  } catch (err) {
+    alert(err.message);
   }
 }
 

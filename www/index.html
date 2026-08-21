@@ -560,12 +560,9 @@
       </div>
       <div class="req-card" style="cursor:default;display:none;" id="proposal-commission-preview">
         <div class="summary-row"><span>Valor da proposta</span><span id="proposal-commission-value">R$ 0,00</span></div>
-        <div class="summary-row"><span id="proposal-commission-rate-label">Taxa da plataforma</span><span id="proposal-commission-fee">- R$ 0,00</span></div>
-        <p style="font-size:11px;color:var(--ink-faint);margin:8px 0 2px;">Se o cliente pagar no...</p>
-        <div class="summary-row"><span>Cartão de crédito (taxa estimada)</span><span id="proposal-commission-card-fee">- R$ 0,00</span></div>
-        <div class="summary-row"><span>→ Você recebe</span><span id="proposal-commission-net-card" style="color:var(--success);">R$ 0,00</span></div>
-        <div class="summary-row"><span>Pix (taxa 1,19%)</span><span id="proposal-commission-pix-fee">- R$ 0,00</span></div>
-        <div class="summary-row"><span>→ Você recebe</span><span id="proposal-commission-net-pix" style="color:var(--success);">R$ 0,00</span></div>
+        <div class="summary-row"><span>Você recebe do cliente</span><span id="proposal-commission-net" style="color:var(--success);">R$ 0,00</span></div>
+        <div class="summary-row"><span id="proposal-commission-rate-label">Taxa da NEXSERV</span><span id="proposal-commission-fee">- R$ 0,00</span></div>
+        <p style="font-size:11px;color:var(--ink-faint);margin:8px 0 2px;">O cliente paga esse valor direto a você. A taxa da NEXSERV é cobrada separadamente, por Pix, depois que o serviço for concluído, confirmado pelo cliente e avaliado.</p>
       </div>
       <div class="field">
         <label>Disponibilidade</label>
@@ -937,8 +934,8 @@
     <div class="topbar"><h2>Meus trabalhos</h2></div>
     <div class="screen-scroll">
       <div class="role-toggle">
-        <button type="button" class="active" id="jobs-tab-active" onclick="setJobsTab('active')">Em andamento</button>
-        <button type="button" id="jobs-tab-proposals" onclick="setJobsTab('proposals')">Minhas propostas</button>
+        <button type="button" class="active" id="jobs-tab-proposals" onclick="setJobsTab('proposals')">Minhas propostas</button>
+        <button type="button" id="jobs-tab-active" onclick="setJobsTab('active')">Em andamento</button>
       </div>
       <div id="provider-jobs-list"></div>
     </div>
@@ -1670,7 +1667,7 @@
   window.__signInWithRedirect = signInWithRedirect;
   window.__getRedirectResult = getRedirectResult;
 </script>
-<script src="app.js?v=20260820d" defer></script>
+<script src="app.js?v=20260820g" defer></script>
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => navigator.serviceWorker.register('/app/sw.js'));
