@@ -494,7 +494,7 @@ async function googleAuthProfile(intent) {
 
     // Popup falhou ou foi bloqueado — tenta redirect como fallback no mobile
     if (IS_MOBILE_WEB) {
-      localStorage.setItem(GOOGLE_REDIRECT_INTENT_KEY, JSON.stringify({ intent, role: selectedRole }));
+      localStorage.setItem(GOOGLE_REDIRECT_INTENT_KEY, JSON.stringify({ intent, role: selectedRole, provider: 'google' }));
       await window.__signInWithRedirect(auth, new window.__GoogleAuthProvider());
       return null; // não deve nem chegar aqui — a navegação já deve ter acontecido
     }
@@ -505,30 +505,80 @@ async function googleAuthProfile(intent) {
   return { idToken, name: result.user.displayName, email: result.user.email, photoUrl: result.user.photoURL };
 }
 
-// Preenche/completa o cadastro a partir do perfil do Google — mesma lógica
-// usada tanto por quem clicou "Preencher com Google" na tela de cadastro
-// quanto por quem clicou "Entrar com Google" mas ainda não tem conta.
-// Pré-preenche o formulário já aberto com o perfil do Google — não navega
-// nem mexe no papel selecionado, pra não perder categorias/cidades que um
-// prestador já tivesse marcado antes de clicar no botão do Google.
-async function applyGoogleProfileToRegisterForm(profile, role) {
+// Mesma lógica de googleAuthProfile, só trocando o provedor — ver comentário
+// lá em cima pra entender a diferença nativo (Capacitor) vs. navegador.
+async function appleAuthProfile(intent) {
+  if (window.Capacitor?.isNativePlatform?.()) {
+    const FirebaseAuthentication = window.Capacitor?.Plugins?.FirebaseAuthentication;
+    if (!FirebaseAuthentication) throw new Error('Login com Apple indisponível no momento.');
+    let result;
+    try {
+      result = await FirebaseAuthentication.signInWithApple();
+    } catch (err) {
+      if (err.message?.includes('CANCELED') || err.message?.includes('cancel')) return null;
+      throw new Error('Não foi possível entrar com a Apple. Tente novamente.');
+    }
+    if (!result?.credential?.idToken) return null;
+    const idTokenResult = await FirebaseAuthentication.getIdToken();
+    return {
+      idToken: idTokenResult.token,
+      // A Apple só manda nome na PRIMEIRA autorização de cada usuário — em
+      // logins seguintes vem null, e o Firebase não guarda isso pra devolver
+      // depois. Se vier vazio aqui, o cadastro simplesmente pede o nome
+      // normalmente (reg-name deixa de ficar readOnly nesse caso).
+      name: result.user?.displayName || null,
+      email: result.user?.email || null,
+      photoUrl: result.user?.photoUrl || null,
+    };
+  }
+
+  const auth = window.__firebaseAuth;
+  if (!auth) throw new Error('Login com Apple indisponível no momento.');
+
+  let result;
+  try {
+    result = await window.__signInWithPopup(auth, new window.__OAuthProvider('apple.com'));
+  } catch (err) {
+    if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') return null;
+
+    if (IS_MOBILE_WEB) {
+      localStorage.setItem(GOOGLE_REDIRECT_INTENT_KEY, JSON.stringify({ intent, role: selectedRole, provider: 'apple' }));
+      await window.__signInWithRedirect(auth, new window.__OAuthProvider('apple.com'));
+      return null;
+    }
+
+    throw new Error('Não foi possível entrar com a Apple. Tente novamente.');
+  }
+  const idToken = await result.user.getIdToken();
+  return { idToken, name: result.user.displayName, email: result.user.email, photoUrl: result.user.photoURL };
+}
+
+// Preenche/completa o cadastro a partir do perfil do Google/Apple — mesma
+// lógica usada tanto por quem clicou "Preencher com..." na tela de cadastro
+// quanto por quem clicou "Entrar com..." mas ainda não tem conta. `provider`
+// só decide qual botão fica em estado de carregando — a validação do token
+// no backend é a mesma pra qualquer provedor Firebase (ver /auth/google-login).
+// Pré-preenche o formulário já aberto com o perfil — não navega nem mexe no
+// papel selecionado, pra não perder categorias/cidades que um prestador já
+// tivesse marcado antes de clicar no botão.
+async function applyGoogleProfileToRegisterForm(profile, role, provider = 'google') {
   prefillRegisterFromGoogle(profile);
   // Cliente não tem campo obrigatório além de nome/e-mail/termos, então
   // completa o cadastro sozinho em vez de esperar um segundo clique em
   // "Criar conta". Prestador precisa preencher CPF/CNPJ e endereço antes.
   if (role === 'client') {
-    await doRegister(document.getElementById('google-register-btn'));
+    await doRegister(document.getElementById(provider === 'apple' ? 'apple-register-btn' : 'google-register-btn'));
   }
 }
 
 // Abre a tela de cadastro (quem chama ainda não estava nela — veio do botão
-// de login ou da volta de um signInWithRedirect) e aplica o perfil do Google.
-async function completeGoogleRegister(profile, role) {
+// de login ou da volta de um signInWithRedirect) e aplica o perfil.
+async function completeGoogleRegister(profile, role, provider = 'google') {
   openRegister(role, registerBackScreen || homeScreenId());
-  await applyGoogleProfileToRegisterForm(profile, role);
+  await applyGoogleProfileToRegisterForm(profile, role, provider);
 }
 
-async function finishGoogleLogin(profile) {
+async function finishGoogleLogin(profile, provider = 'google') {
   const errorEl = document.getElementById('login-error');
   const res = await fetch(`${API_BASE}/auth/google-login`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -541,10 +591,10 @@ async function finishGoogleLogin(profile) {
     return;
   }
   if (data.error === 'no_account') {
-    await completeGoogleRegister(profile, 'client');
+    await completeGoogleRegister(profile, 'client', provider);
     return;
   }
-  errorEl.textContent = data.error || 'Erro ao entrar com Google';
+  errorEl.textContent = data.error || `Erro ao entrar com ${provider === 'apple' ? 'a Apple' : 'o Google'}`;
 }
 
 async function handleGoogleLoginClick() {
@@ -556,6 +606,22 @@ async function handleGoogleLoginClick() {
     const profile = await googleAuthProfile('login');
     if (!profile) { btn.disabled = false; return; } // popup cancelado, ou redirecionou (mobile) — nada mais a fazer aqui
     await finishGoogleLogin(profile);
+  } catch (err) {
+    errorEl.textContent = err.message;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function handleAppleLoginClick() {
+  const btn = document.getElementById('apple-login-btn');
+  const errorEl = document.getElementById('login-error');
+  errorEl.textContent = '';
+  btn.disabled = true;
+  try {
+    const profile = await appleAuthProfile('login');
+    if (!profile) { btn.disabled = false; return; }
+    await finishGoogleLogin(profile, 'apple');
   } catch (err) {
     errorEl.textContent = err.message;
   } finally {
@@ -582,16 +648,16 @@ async function handleGoogleRedirectResult() {
   if (!stored) return false; // nenhuma intenção guardada, não veio de redirect
 
   localStorage.removeItem(GOOGLE_REDIRECT_INTENT_KEY);
-  const { intent, role } = JSON.parse(stored);
+  const { intent, role, provider = 'google' } = JSON.parse(stored);
 
   // Se getRedirectResult() funcionou, usa seu resultado
   if (result) {
     const idToken = await result.user.getIdToken();
     const profile = { idToken, name: result.user.displayName, email: result.user.email, photoUrl: result.user.photoURL };
     if (intent === 'register') {
-      await completeGoogleRegister(profile, role || 'client');
+      await completeGoogleRegister(profile, role || 'client', provider);
     } else {
-      await finishGoogleLogin(profile);
+      await finishGoogleLogin(profile, provider);
     }
     return true;
   }
@@ -606,9 +672,9 @@ async function handleGoogleRedirectResult() {
       const idToken = await user.getIdToken();
       const profile = { idToken, name: user.displayName, email: user.email, photoUrl: user.photoURL };
       if (intent === 'register') {
-        await completeGoogleRegister(profile, role || 'client');
+        await completeGoogleRegister(profile, role || 'client', provider);
       } else {
-        await finishGoogleLogin(profile);
+        await finishGoogleLogin(profile, provider);
       }
       return true;
     } catch (err) {
@@ -627,10 +693,13 @@ function prefillRegisterFromGoogle(profile) {
   registerGoogleIdToken = profile.idToken;
   document.getElementById('reg-name').value = profile.name || '';
   document.getElementById('reg-email').value = profile.email || '';
-  document.getElementById('reg-name').readOnly = true;
+  // A Apple só devolve o nome na primeira autorização — sem nome, deixa o
+  // campo editável em vez de travar vazio e sem jeito de preencher.
+  document.getElementById('reg-name').readOnly = !!profile.name;
   document.getElementById('reg-email').readOnly = true;
   document.getElementById('reg-password-field').style.display = 'none';
   document.getElementById('google-register-btn').style.display = 'none';
+  document.getElementById('apple-register-btn').style.display = 'none';
   document.getElementById('reg-google-badge').style.display = 'block';
 }
 
@@ -649,6 +718,24 @@ async function handleGoogleRegisterClick() {
   }
   if (!profile) { btn.disabled = false; return; } // popup cancelado, ou redirecionou (mobile) — nada mais a fazer aqui
   await applyGoogleProfileToRegisterForm(profile, selectedRole);
+  btn.disabled = false;
+}
+
+async function handleAppleRegisterClick() {
+  const errorEl = document.getElementById('register-error');
+  errorEl.textContent = '';
+  const btn = document.getElementById('apple-register-btn');
+  btn.disabled = true;
+  let profile;
+  try {
+    profile = await appleAuthProfile('register');
+  } catch (err) {
+    errorEl.textContent = err.message;
+    btn.disabled = false;
+    return;
+  }
+  if (!profile) { btn.disabled = false; return; }
+  await applyGoogleProfileToRegisterForm(profile, selectedRole, 'apple');
   btn.disabled = false;
 }
 
@@ -774,6 +861,9 @@ function setRole(role) {
   document.getElementById('google-register-btn').style.display = '';
   document.getElementById('google-register-btn-label').textContent =
     role === 'client' ? 'Cadastrar com Google' : 'Preencher nome e e-mail com o Google';
+  document.getElementById('apple-register-btn').style.display = '';
+  document.getElementById('apple-register-btn-label').textContent =
+    role === 'client' ? 'Cadastrar com a Apple' : 'Preencher nome e e-mail com a Apple';
   document.getElementById('reg-google-badge').style.display = 'none';
   document.getElementById('reg-name').value = '';
   document.getElementById('reg-email').value = '';
