@@ -2440,9 +2440,13 @@ async function renderConfirmFromRequest(r) {
   lastPaymentContext = currentChat;
 
   document.getElementById('confirm-chat-btn').textContent = user.role === 'provider' ? 'Enviar mensagem ao cliente' : 'Enviar mensagem ao prestador';
-  // Chat só libera depois do pagamento confirmado — evita cliente e prestador
-  // combinarem tudo por fora antes de pagar.
-  document.getElementById('confirm-chat-btn').style.display = (tx && tx.status === 'paid') ? 'block' : 'none';
+  // Chat liberado sempre que essa tela abre — renderConfirmFromRequest só é
+  // chamada pra pedidos já aceitos (accepted/in_progress/awaiting_approval/
+  // done, ver openMyRequest/openProposalCard), nunca pending. Antes exigia
+  // tx.status === 'paid', resquício do modelo de pagamento pelo app: como
+  // esse pagamento não existe mais, essa condição nunca era verdadeira e o
+  // chat ficava escondido dos dois lados pra sempre depois da aceitação.
+  document.getElementById('confirm-chat-btn').style.display = 'block';
 
   const actions = document.getElementById('confirm-actions');
   let actionsHtml = '';
