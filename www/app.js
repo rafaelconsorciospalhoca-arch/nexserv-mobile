@@ -1546,6 +1546,7 @@ async function enterApp() {
     document.getElementById('waiting-expansion-city').textContent = user.city ? `${user.city}${user.state ? '/' + user.state : ''}` : 'sua cidade';
   }
   setTab(homeScreenId());
+  checkPendingCompletionInterstitial();
 
   // Link direto (ex: avisos por WhatsApp) — depois de entrar, pula pra tela
   // pedida em vez de ficar só na home.
@@ -2665,6 +2666,56 @@ async function approveCompletion(requestId, providerName) {
   document.getElementById('rate-service-error').textContent = '';
   renderServiceStars();
   showScreen('rate-service');
+}
+
+// Tela de destaque ao abrir o app — cliente com serviço marcado como
+// entregue pelo prestador (aguardando aprovação), ou prestador com serviço
+// aceito que ainda não marcou como entregue. Fecha com "Depois" mas volta a
+// aparecer toda vez que o app abrir de novo, até a pessoa agir — não marca
+// nada como "visto" em localStorage de propósito. A cobrança da taxa já
+// disparou antes disso (POST /deliver ou /confirm-completion, ver
+// requests.js) — essa tela é só o lembrete visual, não dispara cobrança.
+async function checkPendingCompletionInterstitial() {
+  if (document.getElementById('completion-interstitial-overlay')) return;
+  if (user.role !== 'client' && user.role !== 'provider') return;
+  let pending;
+  try {
+    const requests = await api('/requests/mine');
+    pending = user.role === 'client'
+      ? requests.filter((r) => r.status === 'awaiting_approval')
+      : requests.filter((r) => r.status === 'accepted' || r.status === 'in_progress');
+  } catch { return; } // silencioso — nunca trava a entrada no app por causa disso
+  if (!pending.length) return;
+
+  const isClient = user.role === 'client';
+  const overlay = document.createElement('div');
+  overlay.id = 'completion-interstitial-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px;overflow-y:auto;';
+  overlay.onclick = (e) => { if (e.target === overlay) closeCompletionInterstitial(); };
+  const itemsHtml = pending.map((r) => `
+    <div class="req-card" style="cursor:default;margin-bottom:10px;">
+      <div class="row1"><span class="title">${esc(r.service_name)}</span></div>
+      <div class="meta-row">${esc(isClient ? (r.provider_name || '') : (r.client_name || ''))}</div>
+      <button class="btn btn-primary btn-block btn-small" style="margin-top:8px;" onclick="closeCompletionInterstitial();${isClient
+        ? `approveCompletion('${r.id}','${(r.provider_name || '').replace(/'/g, "\\'")}')`
+        : `deliverRequest('${r.id}')`}">${isClient ? 'Avaliar serviço' : 'Marcar como entregue'}</button>
+    </div>
+  `).join('');
+  overlay.innerHTML = `
+    <div class="card" style="max-width:400px;width:100%;max-height:90vh;overflow-y:auto;">
+      <strong style="font-size:15px;">${isClient ? 'Serviços aguardando sua avaliação' : 'Marque os serviços que já concluiu'}</strong>
+      <p style="font-size:12.5px;color:var(--ink-soft);margin:6px 0 12px;">${isClient
+        ? 'O prestador já marcou como entregue. Confirme e avalie pra fechar o pedido.'
+        : 'Isso dispara a cobrança da taxa da NEXSERV e avisa o cliente pra avaliar.'}</p>
+      <div>${itemsHtml}</div>
+      <button class="btn btn-ghost btn-block" style="margin-top:6px;" onclick="closeCompletionInterstitial()">Depois</button>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+}
+
+function closeCompletionInterstitial() {
+  document.getElementById('completion-interstitial-overlay')?.remove();
 }
 
 async function confirmServiceCompletion(requestId, providerName) {
