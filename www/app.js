@@ -281,6 +281,33 @@ function imgProxy(url) {
   cacheImageToDisk(url); // dispara em background, não trava a renderização da tela
   return url; // retorna URL original mesmo se cache falhar — deixa o navegador carregar direto
 }
+
+// Recuperação de cache "fantasma": o diretório CACHE do Filesystem é
+// apagado pelo sistema operacional sob pressão de armazenamento — e, na
+// prática, muito comumente numa atualização do app — mas o mapa em
+// localStorage (imageDiskCache) sobrevive à atualização normalmente. Sem
+// isso, toda foto cacheada antes de uma atualização vira um ícone de
+// imagem quebrada pra sempre (o app nunca detecta que o arquivo sumiu,
+// porque imgProxy() é síncrono e não checa o disco antes de devolver a
+// URI). Delegado no document porque o evento "error" de <img> não faz
+// bubble — precisa capture:true. Reverse-lookup no mapa porque o elemento
+// só tem o src falho (a URI local), não a URL remota original.
+document.addEventListener('error', (e) => {
+  const el = e.target;
+  if (!(el instanceof HTMLImageElement)) return;
+  if (!window.Capacitor?.isNativePlatform?.()) return;
+  if (el.dataset.imgCacheRetried) return;
+  for (const [originalUrl, cachedSrc] of imageDiskCache) {
+    if (cachedSrc === el.src) {
+      imageDiskCache.delete(originalUrl);
+      persistImageDiskCache();
+      el.dataset.imgCacheRetried = '1';
+      el.src = originalUrl;
+      cacheImageToDisk(originalUrl);
+      break;
+    }
+  }
+}, true);
 function avatarSrc(u) {
   const photo = u?.photoUrl || u?.photo_url;
   return photo ? imgProxy(photo) : avatarDataUri(u?.name);
